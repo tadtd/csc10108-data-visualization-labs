@@ -1,11 +1,5 @@
 streamlit
 crawl4ai
-playwright
-langchain
-langchain-core
-langchain-ollama
-langgraph
-pydantic
 pandas
 panel
 numpy
