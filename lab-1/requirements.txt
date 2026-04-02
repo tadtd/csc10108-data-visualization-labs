@@ -1,7 +1,7 @@
 streamlit
-crawl4ai
 pandas
 panel
 numpy
 matplotlib
 seaborn
+plotly
