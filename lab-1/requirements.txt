@@ -1,7 +1,8 @@
-streamlit
 pandas
-panel
 numpy
+requests
+beautifulsoup4
+tqdm
+streamlit
 matplotlib
 seaborn
-plotly
