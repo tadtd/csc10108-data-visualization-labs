@@ -1,7 +1,57 @@
 [
-    "Sports",
-    "Beauty",
-    "Home & Living",
-    "Automotive",
-    "Office Supplies"
+    {
+        "name": "Truyen tranh, Manga, Comic",
+        "queries": [
+            "truyen tranh manga comic",
+            "truyen tranh",
+            "manga",
+            "comic",
+            "manhwa",
+            "light novel"
+        ]
+    },
+    {
+        "name": "Sach hoc ngoai ngu",
+        "queries": [
+            "sach hoc ngoai ngu",
+            "ielts",
+            "toeic",
+            "jlpt",
+            "hsk",
+            "ngu phap tieng anh"
+        ]
+    },
+    {
+        "name": "Khoa hoc cong nghe",
+        "queries": [
+            "sach khoa hoc cong nghe",
+            "khoa hoc cong nghe",
+            "lap trinh",
+            "du lieu",
+            "ai machine learning",
+            "khoa hoc may tinh"
+        ]
+    },
+    {
+        "name": "Sach nuoi day con",
+        "queries": [
+            "sach nuoi day con",
+            "day con",
+            "nuoi con",
+            "thai giao",
+            "montessori",
+            "tam ly tre em"
+        ]
+    },
+    {
+        "name": "Tieu su hoi ky",
+        "queries": [
+            "sach tieu su hoi ky",
+            "tieu su",
+            "hoi ky",
+            "tu truyen",
+            "danh nhan",
+            "nhan vat noi tieng"
+        ]
+    }
 ]

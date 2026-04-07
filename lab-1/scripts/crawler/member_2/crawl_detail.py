@@ -25,8 +25,8 @@ RAW_DIR = ROOT_DIR / "data" / "raw" / "member_2"
 LOG_FILE = ROOT_DIR / "logs" / "member_2.log"
 
 LISTING_FILE = RAW_DIR / "listing_member_2.csv"
-PRODUCTS_FILE = RAW_DIR / "products_member_2.csv"
-AUTHORS_FILE = RAW_DIR / "authors_member_2.csv"
+PRODUCTS_FILE = RAW_DIR / "products.csv"
+AUTHORS_FILE = RAW_DIR / "authors.csv"
 
 TIKI_DETAIL_API = "https://tiki.vn/api/v2/products/{product_id}"
 REQUEST_TIMEOUT = 20
@@ -104,13 +104,29 @@ def parse_sold_count(payload: dict) -> int:
 
 
 def parse_spec_value(specifications: list, key_candidates: list[str]) -> str:
-    key_candidates = [x.lower() for x in key_candidates]
+    key_candidates = [x.lower().strip() for x in key_candidates]
     for spec in specifications or []:
         for attr in spec.get("attributes", []):
             attr_name = str(attr.get("name", "")).strip().lower()
             if attr_name in key_candidates:
                 return str(attr.get("value", "")).strip()
     return ""
+
+
+def parse_publish_year(value: str | None) -> int | None:
+    if value is None:
+        return None
+
+    text = str(value).strip()
+    if not text:
+        return None
+
+    # Prefer explicit year tokens from full publication dates like 12/03/2024.
+    year_match = re.search(r"\b(19\d{2}|20\d{2})\b", text)
+    if year_match:
+        return int(year_match.group(1))
+
+    return None
 
 
 def as_int(value: str) -> int | None:
@@ -141,7 +157,19 @@ def build_product_row(payload: dict, fallback_category: str, fallback_ranking: i
         author_name = str(authors[0].get("name", "")).strip()
 
     publisher = parse_spec_value(specifications, ["nhà xuất bản", "publisher"])
-    publish_year = as_int(parse_spec_value(specifications, ["năm xuất bản", "publish year", "publication year"]))
+    publish_year = parse_publish_year(
+        parse_spec_value(
+            specifications,
+            [
+                "năm xuất bản",
+                "ngày xuất bản",
+                "publish year",
+                "publication year",
+                "publication date",
+                "published date",
+            ],
+        )
+    )
     page_count = as_int(parse_spec_value(specifications, ["số trang", "number of pages", "page count"]))
 
     is_bestseller, is_top100 = parse_badges(payload)
