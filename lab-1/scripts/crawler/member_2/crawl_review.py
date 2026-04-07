@@ -22,8 +22,8 @@ ROOT_DIR = resolve_root_dir()
 RAW_DIR = ROOT_DIR / "data" / "raw" / "member_2"
 LOG_FILE = ROOT_DIR / "logs" / "member_2.log"
 
-PRODUCTS_FILE = RAW_DIR / "products_member_2.csv"
-REVIEWS_FILE = RAW_DIR / "reviews_member_2.csv"
+PRODUCTS_FILE = RAW_DIR / "products.csv"
+REVIEWS_FILE = RAW_DIR / "reviews.csv"
 
 TIKI_REVIEW_API = "https://tiki.vn/api/v2/reviews"
 REQUEST_TIMEOUT = 20
