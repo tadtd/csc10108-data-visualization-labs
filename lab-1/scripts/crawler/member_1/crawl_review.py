@@ -1,35 +1,35 @@
-import time
-import random
+import argparse
 import logging
 import os
+import random
 
-# Configure logging
+from tiki_client import build_review_record, fetch_reviews
+
 LOG_FILE = "logs/member_1.log"
 os.makedirs(os.path.dirname(LOG_FILE), exist_ok=True)
 logging.basicConfig(
     filename=LOG_FILE,
     level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s'
+    format="%(asctime)s - %(levelname)s - %(message)s",
 )
 
-def crawl_review(product_id):
-    """
-    Mock function to crawl product reviews.
-    """
-    retries = 3
-    while retries > 0:
-        try:
-            logging.info(f"Crawling reviews for product_id: {product_id}")
-            time.sleep(random.uniform(1, 3))
-            
-            print(f"Successfully crawled reviews for product {product_id}")
-            return True
-        except Exception as e:
-            retries -= 1
-            logging.error(f"Error crawling reviews for {product_id}: {e}. Retries left: {retries}")
-            time.sleep(2)
-    return False
+
+def crawl_review(product_id: int, max_reviews: int, per_page: int) -> None:
+    logging.info("Crawling reviews for product_id: %s", product_id)
+    reviews = fetch_reviews(product_id, max_reviews, per_page, (1.0, 2.5))
+    for review in reviews:
+        print(build_review_record(review, product_id))
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description="Fetch reviews for a product.")
+    parser.add_argument("product_id", type=int, help="Tiki product id")
+    parser.add_argument("--max-reviews", type=int, default=10, help="Max reviews to fetch")
+    parser.add_argument("--per-page", type=int, default=5, help="Reviews per page")
+    args = parser.parse_args()
+    crawl_review(args.product_id, args.max_reviews, args.per_page)
+
 
 if __name__ == "__main__":
-    # Mock data
-    crawl_review("12345")
+    random.seed(42)
+    main()
