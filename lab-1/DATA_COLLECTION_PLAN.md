@@ -138,7 +138,7 @@ project-root/
     └── preprocessing.py     # Script làm sạch và feature engineering
 ```
 
-* **Quy ước đặt tên:** `tiki_books_[category].csv`
+* **Quy ước đặt tên:** mỗi thành viên có 3 file `products.csv`, `reviews.csv`, `authors.csv` trong thư mục `data/raw/member_1` và `data/raw/member_2`
 
 ## 7. Kiểm tra chất lượng dữ liệu (Data Quality Check)
 
