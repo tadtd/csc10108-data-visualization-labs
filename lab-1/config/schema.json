@@ -1,0 +1,23 @@
+{
+    "fields": [
+        "product_id",
+        "title",
+        "price",
+        "original_price",
+        "discount_percent",
+        "sold_count",
+        "ranking",
+        "rating",
+        "review_count",
+        "author",
+        "publisher",
+        "category",
+        "publish_year",
+        "page_count",
+        "description",
+        "is_bestseller",
+        "is_top100",
+        "is_combo",
+        "has_gift"
+    ]
+}
