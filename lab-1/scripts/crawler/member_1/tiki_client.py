@@ -1,6 +1,7 @@
 import json
 import logging
 import random
+import re
 import time
 import unicodedata
 from typing import Any, Dict, Iterable, List, Optional, Tuple
@@ -95,6 +96,18 @@ def parse_sold_count(quantity_sold: Any) -> int:
     return parse_int(normalized) or 0
 
 
+def parse_publish_year(value: Any) -> Optional[int]:
+    if value is None or value == "":
+        return None
+    text = str(value).strip()
+    if not text:
+        return None
+    match = re.search(r"\b(19\d{2}|20\d{2})\b", text)
+    if match:
+        return int(match.group(1))
+    return parse_int(text)
+
+
 def extract_attributes(detail: Dict[str, Any]) -> Dict[str, Optional[str]]:
     author = None
     publisher = None
@@ -108,6 +121,9 @@ def extract_attributes(detail: Dict[str, Any]) -> Dict[str, Optional[str]]:
             author = ", ".join(names)
 
     publisher = detail.get("publisher", {}).get("name") or detail.get("publisher")
+    publish_year = parse_publish_year(detail.get("publish_year"))
+    if publish_year is None:
+        publish_year = parse_publish_year(detail.get("publication_date"))
 
     specs = detail.get("specifications") or []
     for group in specs:
@@ -120,8 +136,18 @@ def extract_attributes(detail: Dict[str, Any]) -> Dict[str, Optional[str]]:
                 author = str(value)
             elif not publisher and "nha xuat ban" in name:
                 publisher = str(value)
-            elif not publish_year and "nam xuat ban" in name:
-                publish_year = str(value)
+            elif not publish_year and any(
+                key in name
+                for key in [
+                    "nam xuat ban",
+                    "ngay xuat ban",
+                    "publish year",
+                    "publication year",
+                    "publication date",
+                    "published date",
+                ]
+            ):
+                publish_year = parse_publish_year(value)
             elif not page_count and "so trang" in name:
                 page_count = str(value)
 
