@@ -48,3 +48,6 @@ streamlit run dashboard/app.py
 ```bash
 pip install -r requirements.txt
 ```
+
+## 4. Database
+<image src="assets/[DV]-Book-DB.svg" alt="Database Schema" width="600"/>
