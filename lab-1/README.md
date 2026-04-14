@@ -51,3 +51,8 @@ pip install -r requirements.txt
 
 ## 4. Database
 <image src="assets/[DV]-Book-DB.svg" alt="Database Schema" width="600"/>
+
+## 5. Run the dashboard
+```bash
+uv run streamlit run dashboard/app.py
+```
