@@ -8,6 +8,7 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if str(PROJECT_ROOT) not in sys.path:
   sys.path.insert(0, str(PROJECT_ROOT))
 
+from dashboard.config import APP_TITLE, SIDEBAR_SETTINGS
 from dashboard.tabs import (
   render_discount_publisher,
   render_fomo_gift,
@@ -16,24 +17,37 @@ from dashboard.tabs import (
   render_keywords_popular,
 )
 
-def main():
-  st.set_page_config(page_title="Các yếu tố ảnh hưởng đến hiệu quả bán hàng của mặt hàng sách trên Tiki")
 
-  st.title("Các yếu tố ảnh hưởng đến hiệu quả bán hàng của mặt hàng sách trên Tiki")
+TAB_RENDERERS = {
+  "Giá & Nhà xuất bản": render_discount_publisher,
+  "FOMO & Quà tặng": render_fomo_gift,
+  "Chiến lược thể loại": render_genre_strategy,
+  "Thông tin & Đánh giá": render_info_review,
+  "Từ khóa phổ biến": render_keywords_popular,
+}
+
+
+def main():
+  st.set_page_config(page_title=APP_TITLE)
+
+  st.title(APP_TITLE)
 
   with st.sidebar:
-    selected_tab = st.selectbox("Chọn tab", ["Discount Publisher", "Fomo Gift", "Genre Strategy", "Info Review", "Keywords Popular"])
+    st.markdown(f"### {SIDEBAR_SETTINGS['title']}")
+    
+    color_mode = st.selectbox(
+      'Chế độ màu',
+      ['Mặc định', 'Thân thiện mù màu'],
+      index=1,
+    )
+    
+    selected_tab = st.selectbox(
+      SIDEBAR_SETTINGS["tab_label"],
+      SIDEBAR_SETTINGS["tabs"],
+      index=0,
+    )
 
-  if selected_tab == "Discount Publisher":
-    render_discount_publisher()
-  elif selected_tab == "Fomo Gift":
-    render_fomo_gift()
-  elif selected_tab == "Genre Strategy":
-    render_genre_strategy()
-  elif selected_tab == "Info Review":
-    render_info_review()
-  elif selected_tab == "Keywords Popular":
-    render_keywords_popular()
+  TAB_RENDERERS[selected_tab]()
 
 if __name__ == "__main__":
   main()
