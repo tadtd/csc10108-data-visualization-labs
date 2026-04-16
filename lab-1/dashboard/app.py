@@ -17,23 +17,25 @@ from dashboard.tabs import (
 )
 
 def main():
-  st.set_page_config(page_title="Các yếu tố ảnh hưởng đến hiệu quả bán hàng của mặt hàng sách trên Tiki")
+  st.set_page_config(
+    page_title="Các yếu tố ảnh hưởng đến hiệu quả bán hàng của mặt hàng sách trên Tiki",
+    layout="wide",
+  )
 
   st.title("Các yếu tố ảnh hưởng đến hiệu quả bán hàng của mặt hàng sách trên Tiki")
 
-  with st.sidebar:
-    selected_tab = st.selectbox("Chọn tab", ["Discount Publisher", "Fomo Gift", "Genre Strategy", "Info Review", "Keywords Popular"])
+  tab_renderers = {
+    "Giảm giá và Nhà xuất bản": render_discount_publisher,
+    "Hiệu ứng FOMO và quà tặng": render_fomo_gift,
+    "Chiến lược thể loại": render_genre_strategy,
+    "Thông tin sách và review": render_info_review,
+    "Từ khóa tiêu đề và tác giả phổ biến (Tuấn)": render_keywords_popular,
+  }
 
-  if selected_tab == "Discount Publisher":
-    render_discount_publisher()
-  elif selected_tab == "Fomo Gift":
-    render_fomo_gift()
-  elif selected_tab == "Genre Strategy":
-    render_genre_strategy()
-  elif selected_tab == "Info Review":
-    render_info_review()
-  elif selected_tab == "Keywords Popular":
-    render_keywords_popular()
+  with st.sidebar:
+    selected_tab = st.selectbox("Chọn tab phân tích", list(tab_renderers.keys()))
+
+  tab_renderers[selected_tab]()
 
 if __name__ == "__main__":
   main()
