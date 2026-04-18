@@ -49,7 +49,7 @@ def render():
   with st.expander("Nguồn dữ liệu", expanded=True):
     csv_path = st.text_input(
       "Đường dẫn file products.csv",
-      value="data/raw/products.csv",
+      value="data/processed/products_clean.csv",
       key="keywords_popular_csv_path",
     )
     st.caption("Có thể để trống để tab tự tìm file theo thứ tự ưu tiên trong thư mục data.")
@@ -76,7 +76,7 @@ def render():
   available_categories = sorted(category_series.unique().tolist())
 
   with st.expander("Bộ lọc & cấu hình phân tích", expanded=True):
-    filter_col_1, filter_col_2, filter_col_3, filter_col_4 = st.columns(4)
+    filter_col_1, filter_col_2, filter_col_3, filter_col_4, filter_col_5 = st.columns(5)
     with filter_col_1:
       metric_name = st.selectbox("Chỉ số đánh giá", list(metric_options.keys()), key="keywords_metric")
       metric_col = metric_options[metric_name]
@@ -86,6 +86,15 @@ def render():
       min_sold_count = st.number_input("Ngưỡng sold_count tối thiểu", min_value=0, value=0, step=10)
     with filter_col_4:
       min_review_count = st.number_input("Ngưỡng review_count tối thiểu", min_value=0, value=0, step=5)
+    with filter_col_5:
+      min_feature_support = st.slider(
+        "Số mẫu tối thiểu/đặc trưng",
+        min_value=10,
+        max_value=300,
+        value=40,
+        step=10,
+        help="Đặc trưng có số mẫu thấp hơn ngưỡng này sẽ không dùng để kết luận SMART 1.",
+      )
 
     selected_categories = st.multiselect(
       "Lọc theo category",
@@ -95,7 +104,7 @@ def render():
     )
     include_unknown_author = st.checkbox(
       "Giữ sản phẩm thiếu tên tác giả (Unknown)",
-      value=True,
+      value=False,
       key="keywords_include_unknown_author",
     )
 
@@ -125,20 +134,36 @@ def render():
     st.metric("Tỉ lệ sách có tác giả Unknown", _format_number((filtered_df["author_primary"] == "Unknown").mean() * 100) + "%")
 
   st.markdown("### Mục tiêu 1: Ảnh hưởng của keyword/pattern tiêu đề đến doanh số")
-  feature_impact_df = retriever.compute_feature_impact(filtered_df, metric_col=metric_col)
+  feature_impact_df = retriever.compute_feature_impact(
+    filtered_df,
+    metric_col=metric_col,
+    min_feature_support=min_feature_support,
+  )
+  eligible_feature_df = pd.DataFrame()
 
   if feature_impact_df.empty:
     st.warning("Không đủ dữ liệu để tính tác động keyword/pattern.")
   else:
-    top3_features = (
-      feature_impact_df.dropna(subset=["uplift_pct"])
-      .sort_values(by="uplift_pct", ascending=False)
-      .head(3)
-      .copy()
-    )
-    target_hit_count = int((top3_features["uplift_pct"] >= 20).sum()) if not top3_features.empty else 0
+    eligible_feature_df = feature_impact_df[
+      feature_impact_df["sufficient_support"] & feature_impact_df["uplift_pct"].notna()
+    ].copy()
+    top3_features = eligible_feature_df.head(3).copy()
+    target_hit_count = int((top3_features["target_20pct_met"]).sum()) if not top3_features.empty else 0
 
-    if target_hit_count >= 3:
+    stat_1, stat_2, stat_3 = st.columns(3)
+    with stat_1:
+      st.metric("Đặc trưng đủ mẫu", f"{len(eligible_feature_df)}/{len(feature_impact_df)}")
+    with stat_2:
+      st.metric("Đặc trưng đạt >=20%", f"{int((eligible_feature_df['target_20pct_met']).sum()):,}")
+    with stat_3:
+      st.metric("Top 3 đạt ngưỡng", f"{target_hit_count}/3")
+
+    if len(top3_features) < 3:
+      st.warning(
+        "Chưa đủ 3 đặc trưng có số mẫu đạt ngưỡng để kết luận SMART 1. "
+        "Hãy giảm ngưỡng hỗ trợ hoặc mở rộng bộ lọc dữ liệu."
+      )
+    elif target_hit_count >= 3:
       st.success(
         "Đạt mục tiêu SMART 1: Top 3 đặc trưng quan trọng đều có mức chênh lệch từ 20% trở lên."
       )
@@ -148,16 +173,20 @@ def render():
         f"Số đặc trưng đạt ngưỡng 20% trong Top 3: {target_hit_count}/3."
       )
 
+    chart_feature_df = eligible_feature_df if not eligible_feature_df.empty else feature_impact_df
+
     viz_col_1, viz_col_2 = st.columns(2)
     with viz_col_1:
-      st.plotly_chart(plot_feature_uplift(feature_impact_df, top_n=9), use_container_width=True)
+      st.plotly_chart(plot_feature_uplift(chart_feature_df, top_n=9), use_container_width=True)
     with viz_col_2:
-      st.plotly_chart(plot_feature_average_comparison(feature_impact_df, top_n=6), use_container_width=True)
+      st.plotly_chart(plot_feature_average_comparison(chart_feature_df, top_n=6), use_container_width=True)
 
     sort_map = {
       "Chênh lệch % giảm dần": ("uplift_pct", False),
+      "Điểm tác động giảm dần": ("impact_score", False),
       "Giá trị trung bình nhóm có đặc trưng": ("avg_with_feature", False),
       "Số lượng mẫu nhóm có đặc trưng": ("count_with_feature", False),
+      "Tỉ lệ xuất hiện giảm dần": ("support_ratio", False),
       "Tên đặc trưng": ("feature_label", True),
     }
     selected_sort = st.selectbox("Sắp xếp bảng đặc trưng", list(sort_map.keys()), key="keywords_feature_sort")
@@ -169,9 +198,12 @@ def render():
         "feature_type",
         "feature_label",
         "count_with_feature",
+        "support_ratio",
+        "sufficient_support",
         "avg_with_feature",
         "avg_without_feature",
         "uplift_pct",
+        "impact_score",
         "target_20pct_met",
       ]
     ].rename(
@@ -179,16 +211,22 @@ def render():
         "feature_type": "Loại",
         "feature_label": "Đặc trưng",
         "count_with_feature": "Số mẫu có đặc trưng",
+        "support_ratio": "Tỉ lệ xuất hiện (%)",
+        "sufficient_support": "Đủ mẫu tối thiểu",
         "avg_with_feature": "Trung bình nhóm có đặc trưng",
         "avg_without_feature": "Trung bình nhóm còn lại",
         "uplift_pct": "Chênh lệch %",
+        "impact_score": "Điểm tác động",
         "target_20pct_met": "Đạt ngưỡng 20%",
       }
     )
+    feature_table_df["Tỉ lệ xuất hiện (%)"] = feature_table_df["Tỉ lệ xuất hiện (%)"] * 100
+    feature_table_df["Đủ mẫu tối thiểu"] = np.where(feature_table_df["Đủ mẫu tối thiểu"], "Đủ", "Thiếu")
     feature_table_df["Đạt ngưỡng 20%"] = np.where(feature_table_df["Đạt ngưỡng 20%"], "Đạt", "Chưa đạt")
     st.dataframe(feature_table_df, use_container_width=True)
 
   st.markdown("### Mục tiêu 2: Ảnh hưởng độ phổ biến tác giả đến hiệu quả bán hàng")
+  st.caption("Phân tích mục tiêu 2 tự động loại các bản ghi tác giả Unknown để tránh sai lệch kết luận.")
   author_result = retriever.compute_author_popularity(
     filtered_df,
     top_n=top_n_authors,
@@ -206,13 +244,15 @@ def render():
     other_avg = _extract_group_value(group_summary_df, "Nhóm tác giả còn lại")
     uplift_pct = author_result["uplift_pct"]
 
-    metric_a, metric_b, metric_c = st.columns(3)
+    metric_a, metric_b, metric_c, metric_d = st.columns(4)
     with metric_a:
       st.metric(f"{metric_name} TB nhóm Top", _format_number(top_avg))
     with metric_b:
       st.metric(f"{metric_name} TB nhóm còn lại", _format_number(other_avg))
     with metric_c:
       st.metric("Mức chênh lệch %", _format_number(uplift_pct) + "%")
+    with metric_d:
+      st.metric("Số sách có tác giả hợp lệ", f"{author_result.get('analysis_book_count', 0):,}")
 
     if author_result["target_25pct_met"]:
       st.success("Đạt mục tiêu SMART 2: nhóm sách thuộc Top tác giả phổ biến cao hơn ít nhất 25%.")
@@ -285,8 +325,8 @@ def render():
   st.markdown("### Kết luận nhanh theo dữ liệu đang lọc")
   conclusion_lines: list[str] = []
 
-  if not feature_impact_df.empty:
-    strongest_feature = feature_impact_df.iloc[0]
+  if not eligible_feature_df.empty:
+    strongest_feature = eligible_feature_df.iloc[0]
     conclusion_lines.append(
       "- Đặc trưng tiêu đề nổi bật nhất hiện tại: "
       f"**{strongest_feature['feature_label']}** (chênh lệch {strongest_feature['uplift_pct']:.2f}%)."

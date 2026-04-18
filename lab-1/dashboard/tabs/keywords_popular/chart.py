@@ -18,6 +18,13 @@ def plot_feature_uplift(feature_impact_df: pd.DataFrame, top_n: int = 8) -> go.F
     return _empty_figure("Không có dữ liệu đặc trưng để trực quan hóa.")
 
   chart_df = feature_impact_df.copy().head(top_n)
+  if "support_ratio" not in chart_df.columns:
+    chart_df["support_ratio"] = np.nan
+  if "count_with_feature" not in chart_df.columns:
+    chart_df["count_with_feature"] = 0
+  if "sufficient_support" not in chart_df.columns:
+    chart_df["sufficient_support"] = False
+
   chart_df = chart_df.sort_values(by="uplift_pct", ascending=True)
   chart_df["group"] = np.where(chart_df["uplift_pct"] >= 0, "Tích cực", "Tiêu cực")
 
@@ -32,6 +39,12 @@ def plot_feature_uplift(feature_impact_df: pd.DataFrame, top_n: int = 8) -> go.F
       "uplift_pct": "Chênh lệch % của nhóm có đặc trưng so với nhóm còn lại",
       "feature_label": "Đặc trưng",
       "group": "Xu hướng",
+    },
+    hover_data={
+      "count_with_feature": True,
+      "support_ratio": ":.2%",
+      "sufficient_support": True,
+      "group": False,
     },
     title="Top đặc trưng tiêu đề theo mức chênh lệch doanh số",
   )

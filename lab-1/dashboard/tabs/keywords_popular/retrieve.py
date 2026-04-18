@@ -2,7 +2,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
+import re
 from typing import Any
+import unicodedata
 
 import numpy as np
 import pandas as pd
@@ -11,6 +13,7 @@ import pandas as pd
 @dataclass
 class KeywordsPopularRetriever:
   default_csv_candidates: tuple[str, ...] = (
+    "data/processed/products_clean.csv",
     "data/processed/products_final.csv",
     "data/processed/products.csv",
     "data/raw/products.csv",
@@ -25,6 +28,18 @@ class KeywordsPopularRetriever:
       "tam_ly": r"tâm lý|tam ly|psychology",
       "ky_nang": r"kỹ năng|ky nang|skills?",
     }
+  )
+  unknown_author_tokens: tuple[str, ...] = (
+    "unknown",
+    "na",
+    "n/a",
+    "none",
+    "null",
+    "khong ro",
+    "chua cap nhat",
+    "dang cap nhat",
+    "various authors",
+    "nhieu tac gia",
   )
 
   def load_products(self, csv_path: str | None = None) -> tuple[pd.DataFrame, str]:
@@ -110,17 +125,45 @@ class KeywordsPopularRetriever:
 
     df["pt_has_number"] = df["title_norm"].str.contains(r"\d", regex=True, na=False)
     df["pt_has_colon"] = df["title_norm"].str.contains(":", regex=False, na=False)
-    df["pt_has_dash"] = df["title_norm"].str.contains("-", regex=False, na=False)
-    df["pt_has_listing"] = df["title_norm"].str.contains(r"\s(?:\+|/|\||,)\s", regex=True, na=False)
+    df["pt_has_dash"] = df["title_norm"].str.contains(r"[-–—]", regex=True, na=False)
+    df["pt_has_listing"] = df["title_norm"].str.contains(
+      r"\w\s*(?:\+|/|\||,)\s*\w|\b\d+\.\s*\w",
+      regex=True,
+      na=False,
+    )
 
-  @staticmethod
-  def _build_author_features(df: pd.DataFrame) -> None:
+  def _build_author_features(self, df: pd.DataFrame) -> None:
     author = df["author"].astype("string").fillna("").str.replace(r"\s+", " ", regex=True).str.strip()
     author = author.where(author != "", "Unknown")
 
     df["author_clean"] = author
-    df["author_primary"] = author.str.split(r",|;|/|\||&| và ", regex=True).str[0].str.strip()
-    df["author_primary"] = df["author_primary"].where(df["author_primary"] != "", "Unknown")
+    split_pattern = r";|/|\||\s+và\s+|\s+and\s+|\+|\s*&\s*"
+    df["author_primary"] = author.str.split(split_pattern, regex=True).str[0].str.strip()
+    df["author_primary"] = df["author_primary"].apply(self._normalize_author_name)
+    df["author_is_unknown"] = df["author_primary"].eq("Unknown")
+
+  @staticmethod
+  def _normalize_ascii(text: str) -> str:
+    normalized = unicodedata.normalize("NFKD", text)
+    ascii_text = "".join(ch for ch in normalized if not unicodedata.combining(ch))
+    return ascii_text.lower().strip()
+
+  def _normalize_author_name(self, author_name: Any) -> str:
+    author_str = str(author_name).strip()
+    author_str = re.sub(r"\s+", " ", author_str)
+    author_str = author_str.strip(" .,-")
+
+    if not author_str:
+      return "Unknown"
+
+    author_ascii = self._normalize_ascii(author_str)
+    if author_ascii in self.unknown_author_tokens:
+      return "Unknown"
+
+    if author_ascii.startswith("nhieu tac gia"):
+      return "Unknown"
+
+    return author_str
 
   def get_title_feature_columns(self) -> list[str]:
     return [
@@ -150,6 +193,7 @@ class KeywordsPopularRetriever:
     self,
     df: pd.DataFrame,
     metric_col: str = "sold_count",
+    min_feature_support: int = 30,
   ) -> pd.DataFrame:
     if metric_col not in df.columns:
       raise ValueError(f"Không tìm thấy cột chỉ số '{metric_col}' trong dữ liệu.")
@@ -162,8 +206,13 @@ class KeywordsPopularRetriever:
         continue
 
       mask = df[feature_col].fillna(False).astype(bool)
+      count_with_feature = int(mask.sum())
+      count_without_feature = int((~mask).sum())
+
       metric_with = float(df.loc[mask, metric_col].mean()) if mask.any() else 0.0
       metric_without = float(df.loc[~mask, metric_col].mean()) if (~mask).any() else 0.0
+
+      sufficient_support = count_with_feature >= min_feature_support and count_without_feature >= min_feature_support
 
       uplift_pct = np.nan
       if metric_without > 0:
@@ -174,12 +223,15 @@ class KeywordsPopularRetriever:
           "feature_col": feature_col,
           "feature_label": label_map.get(feature_col, feature_col),
           "feature_type": "Keyword" if feature_col.startswith("kw_") else "Pattern",
-          "count_with_feature": int(mask.sum()),
-          "count_without_feature": int((~mask).sum()),
+          "count_with_feature": count_with_feature,
+          "count_without_feature": count_without_feature,
+          "support_ratio": count_with_feature / len(df) if len(df) > 0 else np.nan,
+          "sufficient_support": sufficient_support,
           "avg_with_feature": metric_with,
           "avg_without_feature": metric_without,
           "uplift_pct": uplift_pct,
-          "target_20pct_met": bool(pd.notna(uplift_pct) and uplift_pct >= 20),
+          "target_20pct_met": bool(pd.notna(uplift_pct) and uplift_pct >= 20 and sufficient_support),
+          "impact_score": float(uplift_pct * np.log1p(count_with_feature)) if pd.notna(uplift_pct) else np.nan,
         }
       )
 
@@ -187,7 +239,11 @@ class KeywordsPopularRetriever:
     if feature_impact_df.empty:
       return feature_impact_df
 
-    return feature_impact_df.sort_values(by="uplift_pct", ascending=False, na_position="last").reset_index(drop=True)
+    return feature_impact_df.sort_values(
+      by=["target_20pct_met", "impact_score", "uplift_pct", "count_with_feature"],
+      ascending=[False, False, False, False],
+      na_position="last",
+    ).reset_index(drop=True)
 
   def compute_author_popularity(
     self,
@@ -198,9 +254,20 @@ class KeywordsPopularRetriever:
     if metric_col not in df.columns:
       raise ValueError(f"Không tìm thấy cột chỉ số '{metric_col}' trong dữ liệu.")
 
-    product_count_col = "product_id" if "product_id" in df.columns else "title"
+    analysis_df = df[df["author_primary"] != "Unknown"].copy()
+    if analysis_df.empty:
+      return {
+        "author_stats": pd.DataFrame(),
+        "group_summary": pd.DataFrame(),
+        "top_authors": set(),
+        "uplift_pct": np.nan,
+        "target_25pct_met": False,
+        "analysis_book_count": 0,
+      }
+
+    product_count_col = "product_id" if "product_id" in analysis_df.columns else "title"
     author_stats = (
-      df.groupby("author_primary", as_index=False)
+      analysis_df.groupby("author_primary", as_index=False)
       .agg(
         total_books=(product_count_col, "count"),
         total_sales=("sold_count", "sum"),
@@ -234,7 +301,7 @@ class KeywordsPopularRetriever:
 
     top_authors = set(author_stats.head(top_n)["author_name"].tolist())
 
-    df_with_group = df.copy()
+    df_with_group = analysis_df.copy()
     group_name = f"Top {top_n} tác giả phổ biến"
     df_with_group["author_group"] = np.where(
       df_with_group["author_primary"].isin(top_authors),
@@ -265,6 +332,7 @@ class KeywordsPopularRetriever:
       "top_authors": top_authors,
       "uplift_pct": uplift_pct,
       "target_25pct_met": bool(pd.notna(uplift_pct) and uplift_pct >= 25),
+      "analysis_book_count": int(len(analysis_df)),
     }
 
   @staticmethod
