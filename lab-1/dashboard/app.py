@@ -11,19 +11,15 @@ if str(PROJECT_ROOT) not in sys.path:
 from dashboard.config import APP_TITLE, SIDEBAR_SETTINGS
 from dashboard.tabs import (
   render_discount_publisher,
-  render_fomo_gift,
   render_genre_strategy,
-  render_info_review,
-  render_keywords_popular,
+  render_overview,
 )
 
 
 TAB_RENDERERS = {
+  "Tổng quan": render_overview,
   "Giá & Nhà xuất bản": render_discount_publisher,
-  "FOMO & Quà tặng": render_fomo_gift,
   "Chiến lược thể loại": render_genre_strategy,
-  "Thông tin & Đánh giá": render_info_review,
-  "Từ khóa phổ biến": render_keywords_popular,
 }
 
 
@@ -40,10 +36,11 @@ def main():
       ['Mặc định', 'Thân thiện mù màu'],
       index=1,
     )
+    st.session_state["color_mode"] = color_mode
     
     selected_tab = st.selectbox(
       SIDEBAR_SETTINGS["tab_label"],
-      SIDEBAR_SETTINGS["tabs"],
+      list(TAB_RENDERERS.keys()),
       index=0,
     )
 

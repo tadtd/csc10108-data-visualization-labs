@@ -11,6 +11,6 @@ def render():
     try:
       df = load_data(csv_path)
       st.success(f"Loaded {len(df)} rows.")
-      st.dataframe(df.head(10), use_container_width=True)
+      st.dataframe(df.head(10), width='stretch')
     except FileNotFoundError as error:
       st.error(str(error))

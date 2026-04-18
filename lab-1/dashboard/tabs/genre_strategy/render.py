@@ -17,30 +17,11 @@ from .chart import (
   draw_publisher_chart,
 )
 from .retrieve import GenreStrategyRetriever
-from dashboard.utils import vnd_format
+from dashboard.utils import apply_common_style, get_palette, vnd_format
 
 
 def _format_number(value: float) -> str:
   return f"{value:,.0f}".replace(",", ".")
-
-
-def _apply_dashboard_style() -> None:
-  st.markdown(
-    """
-    <style>
-      html, body, [class*="css"] {
-        font-family: "Inter", "Segoe UI", Arial, sans-serif;
-      }
-      .insight-box {
-        border-left: 4px solid #1f77b4;
-        background: rgba(31, 119, 180, 0.08);
-        padding: 8px 12px;
-        border-radius: 6px;
-      }
-    </style>
-    """,
-    unsafe_allow_html=True,
-  )
 
 
 @st.cache_data(show_spinner=False)
@@ -134,10 +115,8 @@ def _train_ridge_model(dataset: pd.DataFrame) -> dict[str, pd.DataFrame | float]
 
 
 def render():
-  _apply_dashboard_style()
+  apply_common_style()
   st.subheader("Chiến lược thể loại, nhà xuất bản và combo")
-
-  retriever = GenreStrategyRetriever()
 
   try:
     products_df, _authors_df = _load_data_sources()
@@ -150,10 +129,9 @@ def render():
     return
 
   color_mode = st.session_state.get("color_mode", "Mặc định")
-  if color_mode == "Thân thiện mù màu":
-    palette = ["#0072B2", "#E69F00", "#009E73", "#CC79A7"]
-  else:
-    palette = ["#1f77b4", "#ff7f0e", "#2ca02c", "#9467bd"]
+  palette = get_palette(color_mode)
+
+  retriever = GenreStrategyRetriever()
 
   st.sidebar.markdown("### Bộ lọc phân tích")
   genre_order = [

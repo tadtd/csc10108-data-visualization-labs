@@ -4,6 +4,9 @@ import base64
 
 import streamlit as st
 
+DEFAULT_PALETTE = ["#1f77b4", "#ff7f0e", "#2ca02c", "#9467bd"]
+COLORBLIND_PALETTE = ["#0072B2", "#E69F00", "#009E73", "#CC79A7"]
+
 def load_data(path: str) -> pd.DataFrame:
   if os.path.exists(path):
     return pd.read_csv(path)
@@ -34,5 +37,30 @@ def to_bool(series: pd.Series) -> pd.Series:
 
 def vnd_format(value: float) -> str:
   return f"{value:,.0f}".replace(",", ".")
+
+
+def get_palette(color_mode: str) -> list[str]:
+  if color_mode == "Thân thiện mù màu":
+    return COLORBLIND_PALETTE
+  return DEFAULT_PALETTE
+
+
+def apply_common_style() -> None:
+  st.markdown(
+    """
+    <style>
+      html, body, [class*="css"] {
+        font-family: "Inter", "Segoe UI", Arial, sans-serif;
+      }
+      .insight-box {
+        border-left: 4px solid #1f77b4;
+        background: rgba(31, 119, 180, 0.08);
+        padding: 8px 12px;
+        border-radius: 6px;
+      }
+    </style>
+    """,
+    unsafe_allow_html=True,
+  )
 
 
