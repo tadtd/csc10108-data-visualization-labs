@@ -8,43 +8,34 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if str(PROJECT_ROOT) not in sys.path:
   sys.path.insert(0, str(PROJECT_ROOT))
 
-from dashboard.config import APP_TITLE, SIDEBAR_SETTINGS
 from dashboard.tabs import (
   render_discount_publisher,
+  render_fomo_gift,
   render_genre_strategy,
-  render_overview,
+  render_info_review,
+  render_keywords_popular,
 )
 
-
-TAB_RENDERERS = {
-  "Tổng quan": render_overview,
-  "Giá & Nhà xuất bản": render_discount_publisher,
-  "Chiến lược thể loại": render_genre_strategy,
-}
-
-
 def main():
-  st.set_page_config(page_title=APP_TITLE)
+  st.set_page_config(
+    page_title="Các yếu tố ảnh hưởng đến hiệu quả bán hàng của mặt hàng sách trên Tiki",
+    layout="wide",
+  )
 
-  st.title(APP_TITLE)
+  st.title("Các yếu tố ảnh hưởng đến hiệu quả bán hàng của mặt hàng sách trên Tiki")
+
+  tab_renderers = {
+    "Giảm giá và Nhà xuất bản": render_discount_publisher,
+    "Hiệu ứng FOMO và quà tặng": render_fomo_gift,
+    "Chiến lược thể loại": render_genre_strategy,
+    "Thông tin sách và review": render_info_review,
+    "Từ khóa tiêu đề và tác giả phổ biến (Tuấn)": render_keywords_popular,
+  }
 
   with st.sidebar:
-    st.markdown(f"### {SIDEBAR_SETTINGS['title']}")
-    
-    color_mode = st.selectbox(
-      'Chế độ màu',
-      ['Mặc định', 'Thân thiện mù màu'],
-      index=1,
-    )
-    st.session_state["color_mode"] = color_mode
-    
-    selected_tab = st.selectbox(
-      SIDEBAR_SETTINGS["tab_label"],
-      list(TAB_RENDERERS.keys()),
-      index=0,
-    )
+    selected_tab = st.selectbox("Chọn tab phân tích", list(tab_renderers.keys()))
 
-  TAB_RENDERERS[selected_tab]()
+  tab_renderers[selected_tab]()
 
 if __name__ == "__main__":
   main()

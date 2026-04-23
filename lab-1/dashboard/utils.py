@@ -64,3 +64,7 @@ def apply_common_style() -> None:
   )
 
 
+def load_data(path: str) -> pd.DataFrame:
+  if os.path.exists(path):
+    return pd.read_csv(path)
+  raise FileNotFoundError(f"File {path} not found")
