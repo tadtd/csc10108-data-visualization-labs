@@ -1,5 +1,6 @@
 import pandas as pd
 import plotly.express as px
+import plotly.graph_objects as go
 
 
 def draw_genre_chart(top_genres: pd.DataFrame, palette: list[str]):
@@ -29,15 +30,58 @@ def draw_publisher_chart(publisher_summary: pd.DataFrame, palette: list[str]):
 
 
 def draw_combo_uplift_chart(show_uplift: pd.DataFrame, palette: list[str]):
+  chart_df = show_uplift.copy()
+  chart_df = chart_df[chart_df["uplift_percent"].notna()].sort_values("uplift_percent", ascending=False)
   figure = px.bar(
-    show_uplift,
+    chart_df,
     x="genre",
     y="uplift_percent",
     color_discrete_sequence=[palette[3]],
     labels={"genre": "Thể loại", "uplift_percent": "Mức tăng lượt bán khi bán combo (%)"},
-    title="Combo uplift theo thể loại",
+    title="Mức chênh lệch doanh số khi bán combo theo thể loại",
   )
   figure.add_hline(y=20, line_dash="dash", line_color="red")
+  figure.update_traces(
+    text=chart_df["uplift_percent"].map(lambda x: f"{x:.1f}%"),
+    textposition="outside",
+    cliponaxis=False,
+  )
+  figure.update_layout(xaxis={"categoryorder": "total descending"})
+  return figure
+
+
+def draw_combo_compare_chart_single(genre_row: pd.Series, palette: list[str]):
+  genre_name = str(genre_row["genre"])
+  non_combo = float(genre_row["combo_0"])
+  combo = float(genre_row["combo_1"])
+  uplift = float(genre_row["uplift_percent"])
+
+  figure = go.Figure()
+  figure.add_trace(
+    go.Bar(
+      x=["Bán lẻ", "Combo"],
+      y=[non_combo, combo],
+      marker_color=[palette[1], palette[3]],
+      text=[f"{non_combo:.1f}", f"{combo:.1f}"],
+      textposition="outside",
+      cliponaxis=False,
+    )
+  )
+  figure.update_layout(
+    title=f"So sánh trực tiếp Bán lẻ và Combo ({genre_name})",
+    yaxis_title="Lượt bán trung bình",
+    xaxis_title="Hình thức bán",
+    showlegend=False,
+  )
+  figure.add_annotation(
+    x=0.5,
+    y=max(non_combo, combo) * 1.08 if max(non_combo, combo) > 0 else 0,
+    xref="x domain",
+    yref="y",
+    text=f"Mức chênh lệch: {uplift:.1f}%",
+    showarrow=False,
+    font={"size": 13},
+  )
   return figure
 
 
@@ -48,7 +92,7 @@ def draw_pivot_chart(pivot_table: pd.DataFrame):
     color_continuous_scale="Blues",
     labels={"color": "Lượt bán trung bình"},
     aspect="auto",
-    title="Pivot: lượt bán trung bình theo thể loại và hình thức bán",
+    title="Bảng chéo: lượt bán trung bình theo thể loại và hình thức bán",
   )
 
 
@@ -73,5 +117,5 @@ def draw_ml_bucket_chart(bucket_long: pd.DataFrame, palette: list[str]):
     color="Loại giá trị",
     barmode="group",
     color_discrete_sequence=[palette[0], palette[1]],
-    title="So sánh thực tế và dự báo theo nhóm sản phẩm",
+    title="So sánh trung vị thực tế và dự báo theo nhóm sản phẩm",
   )

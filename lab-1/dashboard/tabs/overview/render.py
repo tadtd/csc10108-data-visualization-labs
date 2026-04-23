@@ -11,7 +11,7 @@ import plotly.graph_objects as go
 import streamlit as st
 
 from dashboard.tabs.discount_publisher.retrieve import DiscountPublisherRetriever
-from dashboard.utils import apply_common_style, get_palette, vnd_format
+from dashboard.utils import apply_common_style, get_palette, render_chart_with_insight, vnd_format
 
 
 def _overview_styles() -> None:
@@ -193,7 +193,7 @@ def render() -> None:
 
   st.subheader("Tổng quan")
   st.caption(
-    "Lát cắt dữ liệu toàn cục: điều chỉnh bộ lọc bên dưới để cập nhật KPI và các panel."
+    "Bức tranh tổng thể về các yếu tố ảnh hưởng đến hiệu quả bán hàng sách trên Tiki."
   )
 
   try:
@@ -213,15 +213,15 @@ def render() -> None:
   color_mode = st.session_state.get("color_mode", "Mặc định")
   palette = get_palette(color_mode)
 
-  # —— Khu vực 1: Filter bar ——
   with st.container():
-    st.markdown("**Bộ lọc toàn cục**")
+    st.markdown("### 1) Bộ lọc tổng quan")
     fc1, fc2, fc3 = st.columns([2, 2, 1])
     with fc1:
       genres_sel = st.multiselect(
         "Thể loại",
         options=genre_options,
         default=[],
+        key="overview_genres_sel",
         help="Để trống = tất cả thể loại.",
       )
     with fc2:
@@ -230,10 +230,18 @@ def render() -> None:
         min_value=p_min,
         max_value=p_max,
         value=(p_min, p_max),
+        key="overview_price_range",
         format="%d",
       )
     with fc3:
-      top_n = st.number_input("Top-N thể loại (panel trái)", min_value=3, max_value=30, value=10, step=1)
+      top_n = st.number_input(
+        "Top-N thể loại (panel trái)",
+        min_value=3,
+        max_value=30,
+        value=10,
+        step=1,
+        key="overview_top_n",
+      )
 
     filtered = _filter_products(raw, genres_sel, price_range[0], price_range[1])
     if not filtered.empty:
@@ -247,7 +255,7 @@ def render() -> None:
 
   kpis = _kpi_snapshot(filtered)
 
-  # —— Khu vực 2: KPI row ——
+  st.markdown("### 2) KPI tổng quan")
   st.markdown('<div class="overview-kpi-row"></div>', unsafe_allow_html=True)
   k1, k2, k3, k4 = st.columns(4)
   with k1:
@@ -261,33 +269,52 @@ def render() -> None:
 
   st.divider()
 
-  # —— Khu vực 3: Main 65 / 35 ——
+  st.markdown("### 3) Các lát cắt chính")
   st.markdown('<div class="overview-main-split"></div>', unsafe_allow_html=True)
   left, right = st.columns([0.65, 0.35])
 
   with left:
     st.markdown("**Khu vực chính (65%)**")
-    st.plotly_chart(_fig_top_genres(filtered, palette, int(top_n)), width='stretch')
-    st.plotly_chart(_fig_price_distribution(filtered, palette), width='stretch')
+    render_chart_with_insight(
+      _fig_top_genres(filtered, palette, int(top_n)),
+      toggle_key="overview_chart_top_genres",
+      insight_text="Biểu đồ nêu rõ nhóm thể loại đóng góp doanh số lớn nhất trong lát cắt hiện tại, làm cơ sở chọn Top nhóm ưu tiên phân tích sâu.",
+      palette=palette,
+    )
+    render_chart_with_insight(
+      _fig_price_distribution(filtered, palette),
+      toggle_key="overview_chart_price_distribution",
+      insight_text="Phân bố giá cho thấy vùng giá chủ đạo của thị trường, hỗ trợ định vị chiến lược giá và tồn kho theo phân khúc.",
+      palette=palette,
+    )
 
   with right:
     st.markdown("**Khu vực bổ trợ (35%)**")
-    st.plotly_chart(_fig_rating_group_sold(filtered, palette), width='stretch')
-    st.plotly_chart(_fig_publisher_share(filtered, palette), width='stretch')
+    render_chart_with_insight(
+      _fig_rating_group_sold(filtered, palette),
+      toggle_key="overview_chart_rating_group",
+      insight_text="So sánh theo nhóm rating giúp quan sát nhanh mối liên hệ giữa cảm nhận chất lượng và hiệu quả bán hàng.",
+      palette=palette,
+    )
+    render_chart_with_insight(
+      _fig_publisher_share(filtered, palette),
+      toggle_key="overview_chart_publisher_share",
+      insight_text="Tỷ trọng doanh số theo nhóm nhà xuất bản phản ánh mức độ tập trung thị phần và vai trò thương hiệu trong danh mục.",
+      palette=palette,
+    )
 
   st.divider()
 
-  # —— Khu vực 4: Insights ——
-  st.markdown("**Nhận xét nhanh (dẫn sang chuyên đề chi tiết)**")
+  st.markdown("### 4) Cách đọc dashboard chi tiết")
   ts = f"{int(kpis['total_sold']):,}".replace(",", ".")
   np = f"{int(kpis['n_products']):,}".replace(",", ".")
   st.markdown(
     f"""
 <div class="insight-box">
   <p style="margin:0;">
-    Trong lát cắt hiện tại, tổng lượt bán ghi nhận là <strong>{ts}</strong>
-    trên <strong>{np}</strong> sản phẩm.
-    Dùng các tab <em>Giá & Nhà xuất bản</em>, <em>Chiến lược thể loại</em>, … để đi sâu từng mục tiêu SMART.
+    Lát cắt hiện tại ghi nhận <strong>{ts}</strong> lượt bán trên <strong>{np}</strong> sản phẩm.
+    Bạn có thể đi sâu theo từng nhóm yếu tố tại các tab chuyên đề:
+    giá/giảm giá, chiến lược thể loại-combo, huy hiệu & quà tặng, thông tin sách & review, và từ khóa tiêu đề & tác giả.
   </p>
 </div>
 """,

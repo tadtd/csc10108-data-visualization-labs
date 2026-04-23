@@ -64,6 +64,11 @@ class GenreStrategyRetriever:
     df["author_clean"] = df["author_clean"].replace("", "Không rõ")
 
     df["revenue_est"] = df["price"] * df["sold_count"]
+    df["disc_band"] = pd.cut(
+      df["discount_percent"],
+      bins=[-1, 0, 10, 20, 30, 100],
+      labels=["0%", "1-10%", "11-20%", "21-30%", ">30%"],
+    )
     return df
 
   def with_publisher_group(self, products: pd.DataFrame) -> tuple[pd.DataFrame, list[str]]:
@@ -159,23 +164,34 @@ class GenreStrategyRetriever:
       filtered.groupby(["genre", "is_combo"], as_index=False)
       .agg(product_count=("product_id", "nunique"), avg_sold=("sold_count", "mean"))
     )
-    enough_data = grouped[grouped["product_count"] >= min_products]
-    if enough_data.empty:
+
+    count_pivot = (
+      grouped.pivot_table(index="genre", columns="is_combo", values="product_count", aggfunc="first")
+      .rename(columns={False: "count_non_combo", True: "count_combo"})
+      .fillna(0)
+    )
+    avg_pivot = (
+      grouped.pivot_table(index="genre", columns="is_combo", values="avg_sold", aggfunc="first")
+      .rename(columns={False: "combo_0", True: "combo_1"})
+    )
+
+    merged = count_pivot.join(avg_pivot, how="inner").reset_index()
+    required_columns = {"count_non_combo", "count_combo", "combo_0", "combo_1"}
+    if not required_columns.issubset(set(merged.columns)):
       return pd.DataFrame()
 
-    pivot = enough_data.pivot_table(index="genre", columns="is_combo", values="avg_sold")
-    pivot.columns = [f"combo_{int(column)}" for column in pivot.columns]
-    pivot = pivot.reset_index()
-
-    if "combo_0" not in pivot.columns or "combo_1" not in pivot.columns:
+    merged = merged[
+      (merged["count_non_combo"] >= min_products)
+      & (merged["count_combo"] >= min_products)
+      & (merged["combo_0"] > 0)
+      & merged["combo_0"].notna()
+      & merged["combo_1"].notna()
+    ].copy()
+    if merged.empty:
       return pd.DataFrame()
 
-    pivot = pivot[pivot["combo_0"] > 0]
-    if pivot.empty:
-      return pd.DataFrame()
-
-    pivot["uplift_percent"] = (pivot["combo_1"] - pivot["combo_0"]) / pivot["combo_0"] * 100
-    return pivot.sort_values("uplift_percent", ascending=False)
+    merged["uplift_percent"] = (merged["combo_1"] - merged["combo_0"]) / merged["combo_0"] * 100
+    return merged.sort_values("uplift_percent", ascending=False)
 
   def combo_pivot_table(self, filtered: pd.DataFrame, top_n: int = 12) -> pd.DataFrame:
     if filtered.empty:
@@ -220,8 +236,12 @@ class GenreStrategyRetriever:
       if column not in df.columns:
         df[column] = np.nan
 
-    for column in ["genre", "disc_band", "publisher_group"]:
+    for column in ["genre", "publisher_group"]:
       df[column] = df[column].fillna("Không rõ").astype(str)
+    if "disc_band" in df.columns:
+      df["disc_band"] = df["disc_band"].astype(str).replace("nan", "Không rõ").fillna("Không rõ")
+    else:
+      df["disc_band"] = "Không rõ"
 
     for column in ["is_combo", "is_bestseller", "is_top100", "has_gift"]:
       df[column] = to_bool(df[column]).astype(int)

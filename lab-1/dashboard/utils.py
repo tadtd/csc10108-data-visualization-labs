@@ -57,6 +57,13 @@ def apply_common_style() -> None:
         background: rgba(31, 119, 180, 0.08);
         padding: 8px 12px;
         border-radius: 6px;
+        margin-top: 6px;
+      }
+      .chart-card {
+        border: 1px solid rgba(128, 128, 128, 0.25);
+        border-radius: 10px;
+        padding: 10px 10px 2px 10px;
+        margin-bottom: 10px;
       }
     </style>
     """,
@@ -64,3 +71,34 @@ def apply_common_style() -> None:
   )
 
 
+def style_plotly_figure(fig, palette: list[str] | None = None):
+  """Apply a unified Plotly style for the whole dashboard."""
+  colorway = palette or DEFAULT_PALETTE
+  fig.update_layout(
+    template="plotly_white",
+    font={"family": "Inter, Segoe UI, Arial, sans-serif", "size": 13},
+    colorway=colorway,
+    margin={"l": 20, "r": 20, "t": 60, "b": 20},
+    legend={"orientation": "h", "yanchor": "bottom", "y": 1.02, "xanchor": "right", "x": 1},
+  )
+  fig.update_xaxes(showgrid=False)
+  fig.update_yaxes(showgrid=True, gridcolor="rgba(0,0,0,0.08)")
+  return fig
+
+
+def render_insight_box(text: str) -> None:
+  st.markdown(f"<div class='insight-box'>{text}</div>", unsafe_allow_html=True)
+
+
+def render_chart_with_insight(
+  fig,
+  *,
+  toggle_key: str,
+  insight_text: str,
+  palette: list[str] | None = None,
+  toggle_label: str = "Xem insight",
+) -> None:
+  style_plotly_figure(fig, palette=palette)
+  st.plotly_chart(fig, width="stretch")
+  if st.toggle(toggle_label, value=False, key=toggle_key):
+    render_insight_box(insight_text)

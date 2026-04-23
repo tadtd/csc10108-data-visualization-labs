@@ -8,43 +8,53 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if str(PROJECT_ROOT) not in sys.path:
   sys.path.insert(0, str(PROJECT_ROOT))
 
-from dashboard.config import APP_TITLE, SIDEBAR_SETTINGS
 from dashboard.tabs import (
   render_discount_publisher,
+  render_fomo_gift,
   render_genre_strategy,
+  render_info_review,
+  render_keywords_popular,
   render_overview,
 )
 
-
-TAB_RENDERERS = {
-  "Tổng quan": render_overview,
-  "Giá & Nhà xuất bản": render_discount_publisher,
-  "Chiến lược thể loại": render_genre_strategy,
-}
-
-
 def main():
-  st.set_page_config(page_title=APP_TITLE)
+  st.set_page_config(
+    page_title="Các yếu tố ảnh hưởng đến hiệu quả bán hàng của mặt hàng sách trên Tiki",
+    layout="wide",
+  )
 
-  st.title(APP_TITLE)
+  st.title("Các yếu tố ảnh hưởng đến hiệu quả bán hàng của mặt hàng sách trên Tiki")
+  st.caption("Dashboard tương tác phân tích các yếu tố ảnh hưởng đến hiệu quả bán sách trên sàn Tiki.")
+
+  tab_renderers = {
+    "Tổng quan": render_overview,
+    "Giá, giảm giá và nhà xuất bản": render_discount_publisher,
+    "Huy hiệu bán chạy và quà tặng": render_fomo_gift,
+    "Thể loại, nhà xuất bản và combo": render_genre_strategy,
+    "Thông tin sách và phản hồi người mua": render_info_review,
+    "Từ khóa tiêu đề và tác giả": render_keywords_popular,
+  }
 
   with st.sidebar:
-    st.markdown(f"### {SIDEBAR_SETTINGS['title']}")
-    
-    color_mode = st.selectbox(
-      'Chế độ màu',
-      ['Mặc định', 'Thân thiện mù màu'],
-      index=1,
-    )
-    st.session_state["color_mode"] = color_mode
-    
-    selected_tab = st.selectbox(
-      SIDEBAR_SETTINGS["tab_label"],
-      list(TAB_RENDERERS.keys()),
-      index=0,
+    st.markdown("### Tùy chỉnh nhanh")
+    st.session_state["color_mode"] = st.selectbox(
+      "Bảng màu",
+      ["Mặc định", "Thân thiện mù màu"],
+      index=0 if st.session_state.get("color_mode", "Mặc định") == "Mặc định" else 1,
+      key="global_color_mode",
     )
 
-  TAB_RENDERERS[selected_tab]()
+  selected_tab = st.segmented_control(
+    "Chọn chuyên đề phân tích",
+    options=list(tab_renderers.keys()),
+    key="dashboard_selected_tab",
+    selection_mode="single",
+    default="Tổng quan",
+    label_visibility="collapsed",
+  )
+  if selected_tab is None:
+    selected_tab = "Tổng quan"
+  tab_renderers[selected_tab]()
 
 if __name__ == "__main__":
   main()

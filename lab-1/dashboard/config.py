@@ -12,10 +12,10 @@ SIDEBAR_SETTINGS = {
   "title": "Điều hướng dashboard",
   "tab_label": "Chọn chuyên đề phân tích",
   "tabs": [
-    "Giá & Nhà xuất bản",
-    "FOMO & Quà tặng",
-    "Chiến lược thể loại",
-    "Thông tin & Đánh giá",
-    "Từ khóa phổ biến",
+    "Giá, giảm giá và nhà xuất bản",
+    "Huy hiệu bán chạy và quà tặng",
+    "Thể loại, nhà xuất bản và combo",
+    "Thông tin sách và phản hồi người mua",
+    "Từ khóa tiêu đề và tác giả",
   ],
 }

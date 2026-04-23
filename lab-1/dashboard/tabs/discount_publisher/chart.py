@@ -31,8 +31,8 @@ def draw_rating_group_chart(summary: pd.DataFrame, palette: list[str]):
     y="avg_sold",
     color="rating_group",
     color_discrete_sequence=[palette[2], palette[0]],
-    labels={"rating_group": "Nhóm rating", "avg_sold": "Lượt bán trung bình"},
-    title="So sánh nhóm rating >=4.5 và <4.5",
+    labels={"rating_group": "Nhóm đánh giá", "avg_sold": "Lượt bán trung bình"},
+    title="So sánh nhóm đánh giá >=4.5 và <4.5",
   )
 
 
@@ -54,7 +54,7 @@ def draw_corr_heatmap(corr: pd.DataFrame):
     text_auto=".2f",
     color_continuous_scale="Blues",
     aspect="auto",
-    title="Ma trận tương quan giữa biến giá/rating/review và lượt bán",
+    title="Ma trận tương quan giữa biến giá/đánh giá/số review và lượt bán",
   )
 
 
@@ -66,7 +66,7 @@ def draw_ml_importance(importance: pd.DataFrame):
     orientation="h",
     color_discrete_sequence=["#2ca02c"],
     labels={"importance": "Mức quan trọng", "feature": "Biến"},
-    title="Top biến quan trọng theo RandomForest",
+    title="Nhóm biến quan trọng theo mô hình Rừng ngẫu nhiên",
   )
 
 
