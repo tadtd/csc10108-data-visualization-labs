@@ -12,12 +12,13 @@ from .chart import (
   plot_top100_uplift_by_category,
 )
 from .retrieve import FomoGiftRetriever
+from dashboard.utils import apply_common_style, get_palette, render_chart_with_insight
 
 
 @st.cache_data(show_spinner=False)
-def _load_prepared_data(csv_path: str) -> tuple[pd.DataFrame, str]:
+def _load_prepared_data() -> tuple[pd.DataFrame, str]:
   retriever = FomoGiftRetriever()
-  products_df, source_path = retriever.load_products(csv_path if csv_path.strip() else None)
+  products_df, source_path = retriever.load_products()
   prepared_df = retriever.prepare_dataset(products_df)
   return prepared_df, source_path
 
@@ -29,25 +30,19 @@ def _format_number(value: float, decimals: int = 2) -> str:
 
 
 def render():
-  st.subheader("Mục tiêu phân tích: Hiệu ứng FOMO từ huy hiệu Top Bán Chạy và Giá trị cộng thêm")
+  apply_common_style()
+  st.subheader("Huy hiệu bán chạy và giá trị cộng thêm")
   st.caption(
-    "Tab này tập trung vào 2 mục tiêu SMART: "
-    "(1) kiểm chứng huy hiệu 'Top Bán Chạy' giúp doanh số vượt trội ≥50% so với sản phẩm không lọt Top; "
-    "(2) đánh giá nhóm sách có quà tặng/bản đặc biệt có doanh số cao hơn ≥20% so với bản thường."
+    "Phân tích tác động của huy hiệu bán chạy và các yếu tố quà tặng/bản đặc biệt "
+    "đến hiệu quả bán hàng theo từng nhóm sản phẩm."
   )
 
   retriever = FomoGiftRetriever()
-
-  with st.expander("Nguồn dữ liệu", expanded=True):
-    csv_path = st.text_input(
-      "Đường dẫn file products.csv",
-      value="data/processed/products_clean.csv",
-      key="fomo_gift_csv_path",
-    )
-    st.caption("Có thể để trống để tab tự tìm file theo thứ tự ưu tiên trong thư mục data.")
+  color_mode = st.session_state.get("color_mode", "Mặc định")
+  palette = get_palette(color_mode)
 
   try:
-    prepared_df, source_path = _load_prepared_data(csv_path)
+    prepared_df, source_path = _load_prepared_data()
   except (FileNotFoundError, ValueError) as error:
     st.error(str(error))
     return
@@ -56,7 +51,7 @@ def render():
     st.warning("Dữ liệu rỗng, chưa thể thực hiện phân tích.")
     return
 
-  st.info(f"Đang sử dụng dữ liệu: {source_path} | Tổng số sản phẩm: {len(prepared_df):,}")
+  # st.info(f"Đang sử dụng cleaned data: {source_path} | Tổng số sản phẩm: {len(prepared_df):,}")
 
   metric_options = {
     "Số lượng bán": "sold_count",
@@ -74,13 +69,19 @@ def render():
       metric_col = metric_options[metric_name]
     with filter_col_2:
       badge_col = st.selectbox(
-        "Cột huy hiệu (SMART 1)",
+        "Cột huy hiệu",
         ["is_top100", "is_bestseller"],
         key="fomo_badge_col",
         help="is_top100: đứng trong Top 100 danh mục con; is_bestseller: huy hiệu bán chạy.",
       )
     with filter_col_3:
-      min_sold_count = st.number_input("Ngưỡng sold_count tối thiểu", min_value=0, value=0, step=10)
+      min_sold_count = st.number_input(
+        "Ngưỡng sold_count tối thiểu",
+        min_value=0,
+        value=0,
+        step=10,
+        key="fomo_min_sold_count",
+      )
     with filter_col_4:
       min_feature_support = st.slider(
         "Số mẫu tối thiểu/đặc trưng",
@@ -88,13 +89,21 @@ def render():
         max_value=200,
         value=20,
         step=5,
-        help="Đặc trưng có số mẫu thấp hơn ngưỡng này sẽ không dùng để kết luận SMART 2.",
+        key="fomo_min_feature_support",
+        help="Đặc trưng có số mẫu thấp hơn ngưỡng này chỉ nên dùng để tham khảo.",
       )
+    show_detail_insights = st.toggle(
+      "Hiển thị insight chi tiết",
+      value=True,
+      key="fomo_show_detail_insights",
+      help="Bật để xem thêm nhận xét chi tiết theo từng biểu đồ và bảng.",
+    )
 
     selected_categories = st.multiselect(
       "Lọc theo category",
       options=available_categories,
       default=[],
+      key="fomo_selected_categories",
       help="Bỏ trống để giữ toàn bộ category.",
     )
 
@@ -122,11 +131,10 @@ def render():
   with ov_col_4:
     st.metric(f"{metric_name} trung bình", _format_number(filtered_df[metric_col].mean()))
 
-  # ── SMART 1 ────────────────────────────────────────────────────────────────
-  st.markdown("### Mục tiêu 1: Hiệu ứng FOMO từ huy hiệu 'Top Bán Chạy'")
+  st.markdown("### 1) Tác động của huy hiệu bán chạy")
   st.caption(
-    f"Kiểm chứng liệu sản phẩm có huy hiệu **{badge_col}** có doanh số trung bình "
-    "cao hơn ít nhất **50%** so với sản phẩm không lọt Top trong cùng thể loại hay không."
+    f"So sánh chênh lệch {metric_name.lower()} giữa nhóm có huy hiệu **{badge_col}** "
+    "và nhóm còn lại trong cùng tập lọc."
   )
 
   top100_result = retriever.compute_top100_impact(
@@ -155,46 +163,51 @@ def render():
     with smart1_col_4:
       st.metric("Số SP có huy hiệu Top", f"{top100_result['top_count']:,}")
 
-    if top100_result["target_50pct_met"]:
-      st.success(
-        f"Đạt mục tiêu SMART 1: Sản phẩm có huy hiệu Top vượt trội hơn "
-        f"{_format_number(uplift_pct)}% — đạt ngưỡng ≥50%."
-      )
-    elif pd.notna(uplift_pct) and uplift_pct > 0:
-      st.warning(
-        f"Có chênh lệch tích cực ({_format_number(uplift_pct)}%) nhưng chưa đạt ngưỡng 50% "
-        "của mục tiêu SMART 1 với bộ lọc hiện tại."
-      )
-    else:
-      st.error(
-        "Chưa thấy lợi thế rõ ràng từ huy hiệu Top với bộ lọc hiện tại. "
-        "Thử mở rộng bộ lọc hoặc chọn cột huy hiệu khác."
-      )
+    if show_detail_insights:
+      if pd.notna(uplift_pct) and uplift_pct > 0:
+        st.success(
+          f"Nhóm có huy hiệu đang cao hơn {_format_number(uplift_pct)}% so với nhóm còn lại."
+        )
+      elif pd.notna(uplift_pct):
+        st.warning(
+          f"Nhóm có huy hiệu đang thấp hơn {abs(float(uplift_pct)):.2f}% so với nhóm còn lại."
+        )
+      else:
+        st.info("Chưa đủ dữ liệu để lượng hóa chênh lệch huy hiệu ở bộ lọc hiện tại.")
 
-    st.plotly_chart(
+    render_chart_with_insight(
       plot_top100_overall_comparison(overall_summary, metric_name),
-      use_container_width=True,
+      toggle_key="fomo_chart_top100_overall",
+      insight_text=(
+        f"So sánh trực tiếp hai nhóm có/không huy hiệu theo {metric_name.lower()} để kiểm định mục tiêu hiệu ứng FOMO >=50%."
+      ),
+      palette=palette,
     )
 
     if not category_summary.empty:
       st.markdown("#### Phân tích theo danh mục")
       cat_hit = int(category_summary["target_50pct_met"].sum())
       cat_total = len(category_summary)
-      st.caption(
-        f"Có **{cat_hit}/{cat_total}** danh mục đạt ngưỡng chênh lệch ≥50% "
-        f"(ngưỡng tối thiểu mỗi nhóm: 10 sản phẩm)."
-      )
+      if show_detail_insights:
+        st.caption(
+          f"Có **{cat_hit}/{cat_total}** danh mục có chênh lệch dương rõ rệt giữa 2 nhóm "
+          f"(ngưỡng tối thiểu mỗi nhóm: 10 sản phẩm)."
+        )
 
       chart_s1_cat_1, chart_s1_cat_2 = st.columns(2)
       with chart_s1_cat_1:
-        st.plotly_chart(
+        render_chart_with_insight(
           plot_top100_by_category(category_summary, top_n=10),
-          use_container_width=True,
+          toggle_key="fomo_chart_top100_by_category",
+          insight_text=f"Biểu đồ cho biết danh mục nào hưởng lợi mạnh từ huy hiệu; hiện có {cat_hit}/{cat_total} danh mục có tín hiệu dương rõ rệt.",
+          palette=palette,
         )
       with chart_s1_cat_2:
-        st.plotly_chart(
+        render_chart_with_insight(
           plot_top100_uplift_by_category(category_summary, top_n=12),
-          use_container_width=True,
+          toggle_key="fomo_chart_top100_uplift_category",
+          insight_text="Các cột cao nhất là danh mục có uplift mạnh nhất khi có huy hiệu, dùng để ưu tiên ngân sách hiển thị theo danh mục.",
+          palette=palette,
         )
 
       cat_table = category_summary.rename(columns={
@@ -206,18 +219,17 @@ def render():
         "count_non_top": "Số SP không Top",
         "target_50pct_met": "Đạt ngưỡng 50%",
       })
-      cat_table["Đạt ngưỡng 50%"] = np.where(cat_table["Đạt ngưỡng 50%"], "Đạt", "Chưa đạt")
-      st.dataframe(cat_table, use_container_width=True)
+      cat_table["Đạt ngưỡng 50%"] = np.where(cat_table["Đạt ngưỡng 50%"], "Có", "Không")
+      st.dataframe(cat_table, width='stretch')
     else:
       st.info(
         "Không có danh mục nào đủ mẫu (≥10 sản phẩm mỗi nhóm) để phân tích theo category."
       )
 
-  # ── SMART 2 ────────────────────────────────────────────────────────────────
-  st.markdown("### Mục tiêu 2: Sức hút của 'Giá trị cộng thêm' (Bản đặc biệt, Quà tặng kèm)")
+  st.markdown("### 2) Tác động của quà tặng và phiên bản đặc biệt")
   st.caption(
     "Phát hiện từ khóa quà tặng/bản đặc biệt trong tiêu đề và mô tả sản phẩm, "
-    "sau đó kiểm chứng nhóm này có doanh số trung bình cao hơn ≥**20%** so với bản thường."
+    "sau đó so sánh hiệu quả bán giữa nhóm có/không có giá trị cộng thêm."
   )
 
   gift_impact_df = retriever.compute_gift_impact(
@@ -237,34 +249,37 @@ def render():
     with smart2_col_1:
       st.metric("Đặc trưng đủ mẫu", f"{len(eligible_gift_df)}/{len(gift_impact_df)}")
     with smart2_col_2:
-      st.metric("Đặc trưng đạt ≥20%", f"{int(eligible_gift_df['target_20pct_met'].sum()):,}")
+      st.metric("Đặc trưng uplift dương", f"{int((eligible_gift_df['uplift_pct'] > 0).sum()):,}")
     with smart2_col_3:
       combined_row = gift_impact_df[gift_impact_df["feature_col"] == "has_gift_combined"]
       combined_uplift = float(combined_row.iloc[0]["uplift_pct"]) if not combined_row.empty else np.nan
       st.metric("Chênh lệch (Kết hợp tất cả quà)", _format_number(combined_uplift) + "%")
 
-    if not eligible_gift_df.empty and eligible_gift_df["target_20pct_met"].any():
-      best_gift = eligible_gift_df[eligible_gift_df["target_20pct_met"]].iloc[0]
-      st.success(
-        f"Đạt mục tiêu SMART 2: Đặc trưng **{best_gift['feature_label']}** "
-        f"có mức chênh lệch {_format_number(best_gift['uplift_pct'])}% — đạt ngưỡng ≥20%."
-      )
-    elif not eligible_gift_df.empty:
-      best_gift = eligible_gift_df.iloc[0]
-      st.warning(
-        f"Chưa đạt ngưỡng 20% cho mục tiêu SMART 2. "
-        f"Đặc trưng tốt nhất hiện tại: **{best_gift['feature_label']}** "
-        f"({_format_number(best_gift['uplift_pct'])}%). "
-        "Thử giảm ngưỡng mẫu tối thiểu hoặc mở rộng bộ lọc."
-      )
-    else:
-      st.warning("Không có đặc trưng nào đủ mẫu để kết luận SMART 2.")
+    if show_detail_insights:
+      if not eligible_gift_df.empty:
+        best_gift = eligible_gift_df.iloc[0]
+        st.info(
+          f"Đặc trưng nổi bật nhất hiện tại: **{best_gift['feature_label']}** "
+          f"(chênh lệch {_format_number(best_gift['uplift_pct'])}%)."
+        )
+      else:
+        st.warning("Không có đặc trưng nào đủ mẫu để rút ra insight chi tiết.")
 
     chart_s2_col_1, chart_s2_col_2 = st.columns(2)
     with chart_s2_col_1:
-      st.plotly_chart(plot_gift_uplift(eligible_gift_df if not eligible_gift_df.empty else gift_impact_df), use_container_width=True)
+      render_chart_with_insight(
+        plot_gift_uplift(eligible_gift_df if not eligible_gift_df.empty else gift_impact_df),
+        toggle_key="fomo_chart_gift_uplift",
+        insight_text="Biểu đồ uplift cho biết loại giá trị cộng thêm nào đạt hoặc tiệm cận ngưỡng cải thiện >=20% so với bản thường.",
+        palette=palette,
+      )
     with chart_s2_col_2:
-      st.plotly_chart(plot_gift_average_comparison(eligible_gift_df if not eligible_gift_df.empty else gift_impact_df), use_container_width=True)
+      render_chart_with_insight(
+        plot_gift_average_comparison(eligible_gift_df if not eligible_gift_df.empty else gift_impact_df),
+        toggle_key="fomo_chart_gift_avg_compare",
+        insight_text="So sánh trung bình giữa nhóm có/không có giá trị cộng thêm để xác nhận mức uplift có ổn định theo từng đặc trưng.",
+        palette=palette,
+      )
 
     sort_map = {
       "Chênh lệch % giảm dần": ("uplift_pct", False),
@@ -296,42 +311,38 @@ def render():
       "avg_without_feature": "TB không có quà tặng/đặc biệt",
       "uplift_pct": "Chênh lệch %",
       "impact_score": "Điểm tác động",
-      "target_20pct_met": "Đạt ngưỡng 20%",
+      "target_20pct_met": "Uplift >= 20%",
     })
     gift_table_df["Tỉ lệ xuất hiện (%)"] = gift_table_df["Tỉ lệ xuất hiện (%)"] * 100
     gift_table_df["Đủ mẫu tối thiểu"] = np.where(gift_table_df["Đủ mẫu tối thiểu"], "Đủ", "Thiếu")
-    gift_table_df["Đạt ngưỡng 20%"] = np.where(gift_table_df["Đạt ngưỡng 20%"], "Đạt", "Chưa đạt")
-    st.dataframe(gift_table_df, use_container_width=True)
+    gift_table_df["Uplift >= 20%"] = np.where(gift_table_df["Uplift >= 20%"], "Có", "Không")
+    st.dataframe(gift_table_df, width='stretch')
 
   # ── Kết luận ───────────────────────────────────────────────────────────────
-  st.markdown("### Kết luận nhanh theo dữ liệu đang lọc")
-  conclusion_lines: list[str] = []
+  if show_detail_insights:
+    st.markdown("### Kết luận nhanh theo dữ liệu đang lọc")
+    conclusion_lines: list[str] = []
 
-  if not overall_summary.empty and pd.notna(uplift_pct):
-    conclusion_lines.append(
-      f"- Huy hiệu **{badge_col}**: nhóm Có Top có {metric_name} trung bình cao hơn nhóm còn lại "
-      f"**{_format_number(uplift_pct)}%** — "
-      + ("đạt ngưỡng SMART 50%." if top100_result["target_50pct_met"] else "chưa đạt ngưỡng SMART 50%.")
-    )
-
-  if not gift_impact_df.empty:
-    combined_row = gift_impact_df[gift_impact_df["feature_col"] == "has_gift_combined"]
-    if not combined_row.empty:
-      cu = float(combined_row.iloc[0]["uplift_pct"])
+    if not overall_summary.empty and pd.notna(uplift_pct):
       conclusion_lines.append(
-        f"- Giá trị cộng thêm (kết hợp): nhóm có quà tặng/bản đặc biệt cao hơn "
-        f"**{_format_number(cu)}%** — "
-        + ("đạt ngưỡng SMART 20%." if cu >= 20 else "chưa đạt ngưỡng SMART 20%.")
+        f"- Huy hiệu **{badge_col}**: chênh lệch trung bình hiện tại là **{_format_number(uplift_pct)}%**."
       )
+
     if not gift_impact_df.empty:
+      combined_row = gift_impact_df[gift_impact_df["feature_col"] == "has_gift_combined"]
+      if not combined_row.empty:
+        cu = float(combined_row.iloc[0]["uplift_pct"])
+        conclusion_lines.append(
+          f"- Giá trị cộng thêm (kết hợp): chênh lệch hiện tại **{_format_number(cu)}%**."
+        )
       best = gift_impact_df.iloc[0]
       conclusion_lines.append(
         f"- Đặc trưng quà tặng nổi bật nhất: **{best['feature_label']}** "
         f"(chênh lệch {_format_number(best['uplift_pct'])}%)."
       )
 
-  if not conclusion_lines:
-    st.write("Chưa đủ dữ liệu để kết luận.")
-  else:
-    for line in conclusion_lines:
-      st.markdown(line)
+    if not conclusion_lines:
+      st.write("Chưa đủ dữ liệu để kết luận.")
+    else:
+      for line in conclusion_lines:
+        st.markdown(line)

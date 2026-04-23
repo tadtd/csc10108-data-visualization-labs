@@ -5,15 +5,15 @@ import pandas as pd
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
-_COLOR_PRIMARY = "#D95F02"
-_COLOR_SECONDARY = "#4C78A8"
-_COLOR_POSITIVE = "#2A9D8F"
-_COLOR_NEGATIVE = "#D62828"
+_COLOR_PRIMARY = "#1f77b4"
+_COLOR_SECONDARY = "#ff7f0e"
+_COLOR_POSITIVE = "#2ca02c"
+_COLOR_NEGATIVE = "#9467bd"
 _LABEL_MARGIN_LEFT = 220
-_PLOT_BG = "#111318"
-_PAPER_BG = "#111318"
-_GRID = "#2A2F3A"
-_TEXT = "#E8ECF3"
+_PLOT_BG = "#FFFFFF"
+_PAPER_BG = "#FFFFFF"
+_GRID = "rgba(0,0,0,0.08)"
+_TEXT = "#222222"
 _SUBTLE = "#9AA4B2"
 
 
@@ -37,14 +37,14 @@ def _empty_figure(message: str) -> go.Figure:
   return fig
 
 
-def _apply_dark_theme(fig: go.Figure) -> go.Figure:
+def _apply_chart_theme(fig: go.Figure) -> go.Figure:
   fig.update_layout(
     plot_bgcolor=_PLOT_BG,
     paper_bgcolor=_PAPER_BG,
     font=dict(color=_TEXT),
     title_font=dict(color=_TEXT),
     legend_font=dict(color=_TEXT),
-    hoverlabel=dict(bgcolor="#1B1F2A", font_color=_TEXT),
+    hoverlabel=dict(bgcolor="#FFFFFF", font_color=_TEXT),
   )
   fig.update_xaxes(
     gridcolor=_GRID,
@@ -138,7 +138,7 @@ def plot_group_comparison(
     yaxis=dict(gridcolor=_GRID, zeroline=False, title=metric_name),
     yaxis2=dict(gridcolor=_GRID, zeroline=False, title=metric_name),
   )
-  return _apply_dark_theme(fig)
+  return _apply_chart_theme(fig)
 
 
 def plot_score_distribution(
@@ -181,7 +181,7 @@ def plot_score_distribution(
   fig.update_xaxes(title_text=score_label, showgrid=False)
   fig.update_yaxes(title_text="Số sản phẩm", secondary_y=False, gridcolor=_GRID)
   fig.update_yaxes(title_text=metric_name, secondary_y=True, showgrid=False)
-  return _apply_dark_theme(fig)
+  return _apply_chart_theme(fig)
 
 
 def plot_uplift_bars(
@@ -236,4 +236,4 @@ def plot_uplift_bars(
     xaxis=dict(gridcolor=_GRID, zeroline=False),
     yaxis=dict(showgrid=False),
   )
-  return _apply_dark_theme(fig)
+  return _apply_chart_theme(fig)

@@ -105,7 +105,7 @@ def plot_author_top_sales(author_stats_df: pd.DataFrame, top_n: int = 10) -> go.
     y="author_name",
     orientation="h",
     labels={"total_sales": "Tổng số lượng bán", "author_name": "Tác giả"},
-    title=f"Top {top_n} tác giả phổ biến theo tổng số bán",
+    title=f"{top_n} tác giả phổ biến nhất theo tổng số bán",
     color="rank",
     color_continuous_scale="Blues",
   )
@@ -119,24 +119,64 @@ def plot_author_popularity_scatter(author_stats_df: pd.DataFrame, top_n: int = 1
 
   chart_df = author_stats_df.copy()
   chart_df["group"] = np.where(chart_df["rank"] <= top_n, f"Top {top_n}", "Khác")
+  chart_df["total_books"] = chart_df["total_books"].clip(lower=0)
+  chart_df["total_sales"] = chart_df["total_sales"].clip(lower=0)
+
+  # Cap trục X theo percentile để tránh một vài outlier kéo giãn toàn bộ biểu đồ.
+  x_cap = float(chart_df["total_books"].quantile(0.98))
+  x_cap = max(x_cap, 10.0)
+  chart_df["total_books_plot"] = chart_df["total_books"].clip(upper=x_cap)
+  chart_df["is_x_capped"] = chart_df["total_books"] > x_cap
 
   fig = px.scatter(
     chart_df,
-    x="total_books",
+    x="total_books_plot",
     y="total_sales",
     size="avg_sales_per_book",
     color="group",
     hover_name="author_name",
     color_discrete_map={f"Top {top_n}": "#0068C9", "Khác": "#9AA5B1"},
     labels={
-      "total_books": "Số đầu sách",
+      "total_books_plot": "Số đầu sách (đã nén trục X)",
       "total_sales": "Tổng số lượng bán",
       "avg_sales_per_book": "TB số bán/cuốn",
       "group": "Nhóm",
     },
-    title="Quan hệ giữa số đầu sách và tổng số bán theo tác giả",
+    hover_data={
+      "total_books": True,
+      "is_x_capped": True,
+      "total_books_plot": False,
+    },
+    title="Mối quan hệ giữa số đầu sách và tổng số bán theo tác giả",
   )
-  fig.update_layout(legend_title_text="", margin=dict(l=10, r=10, t=60, b=10), height=500)
+  fig.update_traces(
+    marker=dict(opacity=0.75, line=dict(width=0.4, color="white")),
+    hovertemplate=(
+      "<b>%{hovertext}</b><br>"
+      "Số đầu sách (thực): %{customdata[0]:,.0f}<br>"
+      "Tổng số lượng bán: %{y:,.0f}<br>"
+      "TB số bán/cuốn (size): %{marker.size:,.2f}<br>"
+      "Nhóm: %{fullData.name}<extra></extra>"
+    ),
+  )
+  capped_count = int(chart_df["is_x_capped"].sum())
+  fig.update_layout(
+    legend_title_text="",
+    margin=dict(l=10, r=10, t=80, b=10),
+    height=500,
+    xaxis=dict(range=[0, x_cap * 1.05], tickformat=",.0f"),
+  )
+  if capped_count > 0:
+    fig.add_annotation(
+      xref="paper",
+      yref="paper",
+      x=1,
+      y=1.14,
+      showarrow=False,
+      xanchor="right",
+      text=f"Nén trục X tại P98 ({x_cap:.0f}); có {capped_count} điểm outlier được hiển thị tại mép phải.",
+      font=dict(size=11, color="#606770"),
+    )
   return fig
 
 
@@ -152,7 +192,7 @@ def plot_author_group_comparison(group_summary_df: pd.DataFrame) -> go.Figure:
     color="author_group",
     color_discrete_sequence=["#0068C9", "#8BA3C7"],
     labels={"author_group": "Nhóm tác giả", "avg_metric": "Giá trị trung bình"},
-    title="So sánh nhóm Top tác giả phổ biến và nhóm còn lại",
+    title="So sánh nhóm tác giả hàng đầu và nhóm còn lại",
   )
   fig.update_traces(texttemplate="%{text:,.2f}", textposition="outside")
   fig.update_layout(showlegend=False, margin=dict(l=10, r=10, t=60, b=10), height=420)
@@ -171,7 +211,7 @@ def plot_ml_feature_importance(importance_df: pd.DataFrame, top_n: int = 10) -> 
     x="importance",
     y="feature_label",
     orientation="h",
-    title="Feature importance (RandomForest)",
+    title="Mức độ quan trọng của đặc trưng (Rừng ngẫu nhiên)",
     labels={"importance": "Mức độ quan trọng", "feature_label": "Đặc trưng"},
     color="importance",
     color_continuous_scale="Teal",

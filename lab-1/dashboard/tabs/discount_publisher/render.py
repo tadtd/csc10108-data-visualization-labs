@@ -8,7 +8,7 @@ from sklearn.model_selection import train_test_split
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder
 
-from dashboard.utils import apply_common_style, get_palette, vnd_format
+from dashboard.utils import apply_common_style, get_palette, render_chart_with_insight, vnd_format
 from .chart import (
   draw_corr_heatmap,
   draw_discount_band_chart,
@@ -91,25 +91,33 @@ def render():
     st.warning("Dữ liệu sản phẩm đang rỗng.")
     return
 
-  st.sidebar.markdown("### Bộ lọc tab Giá & NXB")
   genres = [genre for genre in products_df["genre"].value_counts().index.tolist() if str(genre).strip().casefold() not in {"root", "other"}]
-  selected_genres = st.sidebar.multiselect("Thể loại (tab Đàm Đạt)", options=genres, default=genres[:8], key="damdat_genres")
-
   min_price = int(products_df["price"].min())
   max_price = int(products_df["price"].max())
   price_step = max((max_price - min_price) // 120, 1)
   price_options = list(range(min_price, max_price + price_step, price_step))
   if price_options[-1] != max_price:
     price_options.append(max_price)
-  price_range = st.sidebar.select_slider(
-    "Khoảng giá (VND) - tab Đàm Đạt",
-    options=price_options,
-    value=(min_price, max_price),
-    format_func=lambda x: f"{vnd_format(x)} đ",
-    key="damdat_price_range",
-  )
-  rating_range = st.sidebar.slider("Khoảng rating", 0.0, 5.0, (0.0, 5.0), 0.1, key="damdat_rating_range")
-  min_reviews = st.sidebar.slider("Review tối thiểu", 0, 50, 1, key="damdat_min_reviews")
+  with st.expander("Bộ lọc tab Giá & NXB", expanded=False):
+    filter_col_1, filter_col_2, filter_col_3 = st.columns(3)
+    with filter_col_1:
+      selected_genres = st.multiselect("Thể loại", options=genres, default=genres[:8], key="damdat_genres")
+      rating_range = st.slider("Khoảng rating", 0.0, 5.0, (0.0, 5.0), 0.1, key="damdat_rating_range")
+    with filter_col_2:
+      price_range = st.select_slider(
+        "Khoảng giá (VND)",
+        options=price_options,
+        value=(min_price, max_price),
+        format_func=lambda x: f"{vnd_format(x)} đ",
+        key="damdat_price_range",
+      )
+      min_reviews = st.slider("Review tối thiểu", 0, 50, 1, key="damdat_min_reviews")
+    with filter_col_3:
+      show_detail_insights = st.toggle(
+        "Hiển thị insight chi tiết",
+        value=True,
+        key="discount_show_detail_insights",
+      )
 
   filtered_df, top_publishers = retriever.filter_products(
     products_df,
@@ -135,57 +143,91 @@ def render():
   price_summary = retriever.price_band_summary(filtered_df)
   disc_summary = retriever.discount_band_summary(filtered_df)
   col_a, col_b = st.columns(2)
-  col_a.plotly_chart(draw_price_band_chart(price_summary, palette), width="stretch")
-  col_b.plotly_chart(draw_discount_band_chart(disc_summary, palette), width="stretch")
+  with col_a:
+    render_chart_with_insight(
+      draw_price_band_chart(price_summary, palette),
+      toggle_key="discount_chart_price_band",
+      insight_text="Biểu đồ cho thấy dải giá nào đang tạo lượt bán trung bình cao hơn; đây là cơ sở chọn vùng giá trọng tâm để tối ưu doanh số trong giai đoạn phân tích.",
+      palette=palette,
+    )
+  with col_b:
+    render_chart_with_insight(
+      draw_discount_band_chart(disc_summary, palette),
+      toggle_key="discount_chart_discount_band",
+      insight_text="Hiệu quả bán theo mức giảm giá không tăng tuyến tính; cần ưu tiên ngưỡng giảm tối ưu theo dữ liệu thay vì giảm sâu đồng loạt.",
+      palette=palette,
+    )
 
-  st.markdown("### 2) Kiểm tra ngưỡng SMART: rating >= 4.5 cao hơn >=20%?")
+  st.markdown("### 2) So sánh hiệu quả theo nhóm đánh giá")
   rating_summary = retriever.rating_group_summary(filtered_df)
-  st.plotly_chart(draw_rating_group_chart(rating_summary, palette), width="stretch")
   rating_note = "Chưa đủ dữ liệu để so sánh."
   if {"< 4.5", ">= 4.5"}.issubset(set(rating_summary["rating_group"].tolist())):
     high = float(rating_summary.loc[rating_summary["rating_group"] == ">= 4.5", "avg_sold"].iloc[0])
     low = float(rating_summary.loc[rating_summary["rating_group"] == "< 4.5", "avg_sold"].iloc[0])
     if low > 0:
       uplift = (high - low) / low * 100
-      status = "đạt" if uplift >= 20 else "chưa đạt"
-      rating_note = f"Nhóm rating >= 4.5 cao hơn {uplift:.1f}% so với nhóm còn lại, {status} ngưỡng SMART 20%."
-  st.markdown(f"<div class='insight-box'>{rating_note}</div>", unsafe_allow_html=True)
-
-  st.markdown("### 3) Kiểm tra ngưỡng SMART: Top 5 NXB cao hơn >=30%?")
+      target_note = "Đạt mục tiêu >=20%" if uplift >= 20 else "Chưa đạt mục tiêu >=20%"
+      rating_note = f"Nhóm đánh giá >= 4.5 cao hơn {uplift:.1f}% so với nhóm còn lại. {target_note}."
+  render_chart_with_insight(
+    draw_rating_group_chart(rating_summary, palette),
+    toggle_key="discount_chart_rating_group",
+    insight_text=rating_note,
+    palette=palette,
+  )
+  st.markdown("### 3) So sánh Top 5 nhà xuất bản và nhóm còn lại")
   publisher_summary = retriever.publisher_group_summary(filtered_df)
-  st.plotly_chart(draw_publisher_group_chart(publisher_summary, palette), width="stretch")
   publisher_note = "Chưa đủ dữ liệu để so sánh."
   if {"Top 5 NXB", "Khác"}.issubset(set(publisher_summary["publisher_group"].tolist())):
     top5 = float(publisher_summary.loc[publisher_summary["publisher_group"] == "Top 5 NXB", "avg_sold"].iloc[0])
     other = float(publisher_summary.loc[publisher_summary["publisher_group"] == "Khác", "avg_sold"].iloc[0])
     if other > 0:
       gap = (top5 - other) / other * 100
-      status = "đạt" if gap >= 30 else "chưa đạt"
-      publisher_note = f"Top 5 NXB cao hơn {gap:.1f}% so với nhóm còn lại, {status} ngưỡng SMART 30%."
-  st.markdown(f"<div class='insight-box'>{publisher_note}</div>", unsafe_allow_html=True)
+      target_note = "Đạt mục tiêu >=30%" if gap >= 30 else "Chưa đạt mục tiêu >=30%"
+      publisher_note = f"Top 5 NXB cao hơn {gap:.1f}% so với nhóm còn lại. {target_note}."
+  render_chart_with_insight(
+    draw_publisher_group_chart(publisher_summary, palette),
+    toggle_key="discount_chart_publisher_group",
+    insight_text=publisher_note,
+    palette=palette,
+  )
 
   st.markdown("### 4) Top yếu tố ảnh hưởng (thống kê + ML)")
   corr = retriever.numeric_correlation(filtered_df)
   if corr.empty:
     st.info("Dữ liệu chưa đủ để tính tương quan.")
   else:
-    st.plotly_chart(draw_corr_heatmap(corr), width="stretch")
     corr_target = corr["sold_count"].drop(labels=["sold_count"]).abs().sort_values(ascending=False).head(3)
     top_features = ", ".join([f"{feature} ({score:.2f})" for feature, score in corr_target.items()])
-    st.markdown(f"<div class='insight-box'>Top 3 biến tương quan mạnh với lượt bán: <b>{top_features}</b>.</div>", unsafe_allow_html=True)
+    render_chart_with_insight(
+      draw_corr_heatmap(corr),
+      toggle_key="discount_chart_corr_heatmap",
+      insight_text=f"Top 3 biến tương quan mạnh với lượt bán: <b>{top_features}</b>.",
+      palette=palette,
+    )
 
   ml_result = _run_ml(filtered_df)
   if ml_result["ok"]:
-    st.markdown("#### ML insight (RandomForest Regressor)")
+    st.markdown("#### Góc nhìn học máy (Hồi quy Rừng ngẫu nhiên)")
     m1, m2 = st.columns(2)
     m1.metric("R²", f"{ml_result['metrics']['r2']:.3f}")
     m2.metric("MAE", _format_number(ml_result["metrics"]["mae"]))
     importance = ml_result["importance"].head(10).sort_values("importance")
-    st.plotly_chart(draw_ml_importance(importance), width="stretch")
+    render_chart_with_insight(
+      draw_ml_importance(importance),
+      toggle_key="discount_chart_ml_importance",
+      insight_text="Biểu đồ xếp hạng mức ảnh hưởng tương đối của biến đầu vào, dùng để xác định nhóm yếu tố tác động mạnh nhất đến doanh số.",
+      palette=palette,
+    )
 
     bucket = ml_result["bucket"]
     bucket_long = bucket.melt(id_vars="Nhóm dự báo", var_name="Loại giá trị", value_name="Lượt bán")
-    st.plotly_chart(draw_ml_bucket(bucket_long, palette), width="stretch")
-    st.caption("ML dùng để diễn giải xu hướng ảnh hưởng biến, không khẳng định quan hệ nhân quả.")
+    render_chart_with_insight(
+      draw_ml_bucket(bucket_long, palette),
+      toggle_key="discount_chart_ml_bucket",
+      insight_text="Khoảng cách giữa dự báo và thực tế theo từng bucket cho thấy độ ổn định của mô hình khi diễn giải xu hướng doanh số.",
+      palette=palette,
+    )
+    if show_detail_insights:
+      st.caption("ML dùng để diễn giải xu hướng ảnh hưởng biến, không khẳng định quan hệ nhân quả.")
   else:
     st.info("Số mẫu chưa đủ để huấn luyện mô hình ML ổn định.")

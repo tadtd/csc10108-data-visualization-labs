@@ -8,18 +8,13 @@ import unicodedata
 
 import numpy as np
 import pandas as pd
+from dashboard.config import PRODUCTS_PATH
+from dashboard.utils import load_data
 
 
 @dataclass
 class KeywordsPopularRetriever:
-  default_csv_candidates: tuple[str, ...] = (
-    "data/processed/products_clean.csv",
-    "data/processed/products_final.csv",
-    "data/processed/products.csv",
-    "data/raw/products.csv",
-    "data/raw/member_1/products.csv",
-    "data/raw/member_2/products.csv",
-  )
+  products_path: Path = PRODUCTS_PATH
   keyword_patterns: dict[str, str] = field(
     default_factory=lambda: {
       "best_seller": r"best\s?seller|bestseller|bán chạy|ban chay",
@@ -42,26 +37,10 @@ class KeywordsPopularRetriever:
     "nhieu tac gia",
   )
 
-  def load_products(self, csv_path: str | None = None) -> tuple[pd.DataFrame, str]:
-    source_path = self._resolve_source_path(csv_path)
-    df = pd.read_csv(source_path)
-    return df, source_path.as_posix()
-
-  def _resolve_source_path(self, csv_path: str | None = None) -> Path:
-    if csv_path is not None and csv_path.strip():
-      custom_path = Path(csv_path)
-      if custom_path.exists():
-        return custom_path
-      raise FileNotFoundError(f"Không tìm thấy file dữ liệu: {csv_path}")
-
-    for candidate in self.default_csv_candidates:
-      candidate_path = Path(candidate)
-      if candidate_path.exists():
-        return candidate_path
-
-    raise FileNotFoundError(
-      "Không tìm thấy dữ liệu sản phẩm. Vui lòng truyền đường dẫn CSV hợp lệ."
-    )
+  def load_products(self) -> tuple[pd.DataFrame, str]:
+    source_path = str(self.products_path)
+    df = load_data(source_path)
+    return df, source_path
 
   def prepare_dataset(self, products_df: pd.DataFrame) -> pd.DataFrame:
     df = products_df.copy()

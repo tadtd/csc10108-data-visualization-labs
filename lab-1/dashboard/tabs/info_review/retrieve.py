@@ -8,6 +8,8 @@ import re
 
 import numpy as np
 import pandas as pd
+from dashboard.config import PRODUCTS_PATH, REVIEWS_PATH
+from dashboard.utils import load_data
 
 
 def _clean_text(value: Any) -> str:
@@ -21,17 +23,8 @@ def _clean_text(value: Any) -> str:
 
 @dataclass
 class InfoReviewRetriever:
-  product_csv_candidates: tuple[str, ...] = (
-    "data/processed/products_clean.csv",
-    "data/processed/products_final.csv",
-    "data/processed/products.csv",
-    "data/raw/products.csv",
-  )
-  review_csv_candidates: tuple[str, ...] = (
-    "data/processed/reviews_clean.csv",
-    "data/processed/reviews.csv",
-    "data/raw/reviews.csv",
-  )
+  products_path: Path = PRODUCTS_PATH
+  reviews_path: Path = REVIEWS_PATH
   positive_review_patterns: dict[str, str] = field(
     default_factory=lambda: {
       "noi_dung_hay": r"nội dung hay|hay lắm|hay!|rất hay|cuốn hút|lôi cuốn|hấp dẫn",
@@ -43,46 +36,15 @@ class InfoReviewRetriever:
     }
   )
 
-  def load_data(
-    self,
-    products_path: str | None = None,
-    reviews_path: str | None = None,
-  ) -> tuple[pd.DataFrame, pd.DataFrame, str, str]:
-    product_source = self._resolve_source_path(
-      provided_path=products_path,
-      candidates=self.product_csv_candidates,
-      missing_message="Không tìm thấy file dữ liệu sản phẩm.",
-    )
-    review_source = self._resolve_source_path(
-      provided_path=reviews_path,
-      candidates=self.review_csv_candidates,
-      missing_message="Không tìm thấy file dữ liệu review.",
-    )
+  def load_data(self) -> tuple[pd.DataFrame, pd.DataFrame, str, str]:
+    product_source = str(self.products_path)
+    review_source = str(self.reviews_path)
     return (
-      pd.read_csv(product_source),
-      pd.read_csv(review_source),
-      product_source.as_posix(),
-      review_source.as_posix(),
+      load_data(product_source),
+      load_data(review_source),
+      product_source,
+      review_source,
     )
-
-  def _resolve_source_path(
-    self,
-    provided_path: str | None,
-    candidates: tuple[str, ...],
-    missing_message: str,
-  ) -> Path:
-    if provided_path is not None and provided_path.strip():
-      custom_path = Path(provided_path)
-      if custom_path.exists():
-        return custom_path
-      raise FileNotFoundError(f"Không tìm thấy file dữ liệu: {provided_path}")
-
-    for candidate in candidates:
-      candidate_path = Path(candidate)
-      if candidate_path.exists():
-        return candidate_path
-
-    raise FileNotFoundError(missing_message)
 
   def prepare_dataset(
     self,
