@@ -213,110 +213,75 @@ def render() -> None:
   color_mode = st.session_state.get("color_mode", "Mặc định")
   palette = get_palette(color_mode)
 
-  with st.container():
-    st.markdown("### 1) Bộ lọc tổng quan")
-    fc1, fc2, fc3 = st.columns([2, 2, 1])
-    with fc1:
-      genres_sel = st.multiselect(
-        "Thể loại",
-        options=genre_options,
-        default=[],
-        key="overview_genres_sel",
-        help="Để trống = tất cả thể loại.",
-      )
-    with fc2:
-      price_range = st.slider(
-        "Khoảng giá (VND)",
-        min_value=p_min,
-        max_value=p_max,
-        value=(p_min, p_max),
-        key="overview_price_range",
-        format="%d",
-      )
-    with fc3:
-      top_n = st.number_input(
-        "Top-N thể loại (panel trái)",
-        min_value=3,
-        max_value=30,
-        value=10,
-        step=1,
-        key="overview_top_n",
-      )
+  with st.sidebar:
+    st.markdown("### Bộ lọc phân tích")
+    genres_sel = st.multiselect(
+      "Thể loại",
+      options=genre_options,
+      default=[],
+      key="overview_genres_sel",
+      help="Để trống = tất cả thể loại.",
+    )
+    price_range = st.slider(
+      "Khoảng giá (VND)",
+      min_value=p_min,
+      max_value=p_max,
+      value=(p_min, p_max),
+      key="overview_price_range",
+      format="%d",
+    )
+    top_n = st.number_input(
+      "Top-N thể loại",
+      min_value=3,
+      max_value=30,
+      value=10,
+      step=1,
+      key="overview_top_n",
+    )
 
-    filtered = _filter_products(raw, genres_sel, price_range[0], price_range[1])
-    if not filtered.empty:
-      filtered, _ = DiscountPublisherRetriever().with_publisher_group(filtered)
-    filter_hint = f"Đang hiển thị **{len(filtered):,}** sản phẩm".replace(",", ".")
-    if genres_sel:
-      filter_hint += f" · Thể loại: {', '.join(genres_sel[:5])}" + ("…" if len(genres_sel) > 5 else "")
-    st.markdown(filter_hint)
+  filtered = _filter_products(raw, genres_sel, price_range[0], price_range[1])
+  if not filtered.empty:
+    filtered, _ = DiscountPublisherRetriever().with_publisher_group(filtered)
 
-  st.divider()
 
-  kpis = _kpi_snapshot(filtered)
 
-  st.markdown("### 2) KPI tổng quan")
-  st.markdown('<div class="overview-kpi-row"></div>', unsafe_allow_html=True)
-  k1, k2, k3, k4 = st.columns(4)
-  with k1:
-    st.metric("Sản phẩm (sau lọc)", f"{int(kpis['n_products']):,}".replace(",", "."))
-  with k2:
-    st.metric("Tổng lượt bán", f"{int(kpis['total_sold']):,}".replace(",", "."))
-  with k3:
-    st.metric("Đánh giá TB", f"{kpis['avg_rating']:.2f}")
-  with k4:
-    st.metric("Giá TB", f"{vnd_format(kpis['avg_price'])} đ" if kpis["n_products"] else "—")
-
-  st.divider()
-
-  st.markdown("### 3) Các lát cắt chính")
-  st.markdown('<div class="overview-main-split"></div>', unsafe_allow_html=True)
-  left, right = st.columns([0.65, 0.35])
-
-  with left:
-    st.markdown("**Khu vực chính (65%)**")
+  st.markdown("### 1) Tổng quan Thể loại và Phân bố giá")
+  col_a, col_b = st.columns(2)
+  with col_a:
+    top_genre = filtered.groupby("genre")["sold_count"].sum().idxmax() if not filtered.empty and "genre" in filtered.columns else "nhóm dẫn đầu"
+    insight_text_genres = f"Nhìn vào biểu đồ có thể thấy '{top_genre}' đang là nhóm thể loại đóng góp doanh số lớn nhất, là điểm sáng cần tập trung khai thác và phân bổ ngân sách hiển thị."
     render_chart_with_insight(
       _fig_top_genres(filtered, palette, int(top_n)),
       toggle_key="overview_chart_top_genres",
-      insight_text="Biểu đồ nêu rõ nhóm thể loại đóng góp doanh số lớn nhất trong lát cắt hiện tại, làm cơ sở chọn Top nhóm ưu tiên phân tích sâu.",
+      insight_text=insight_text_genres,
       palette=palette,
     )
+  with col_b:
     render_chart_with_insight(
       _fig_price_distribution(filtered, palette),
       toggle_key="overview_chart_price_distribution",
-      insight_text="Phân bố giá cho thấy vùng giá chủ đạo của thị trường, hỗ trợ định vị chiến lược giá và tồn kho theo phân khúc.",
+      insight_text="Cột cao nhất trên biểu đồ chỉ ra vùng giá 'ngọt' (sweet spot) đang có nhiều sản phẩm và thanh khoản tốt nhất, giúp nhà bán hàng tự tin định giá sản phẩm mới.",
       palette=palette,
     )
 
-  with right:
-    st.markdown("**Khu vực bổ trợ (35%)**")
+  st.markdown("### 2) Nhóm đánh giá và Nhóm NXB")
+  col_c, col_d = st.columns(2)
+  with col_c:
+    top_rating_group = filtered.groupby("rating_group")["sold_count"].mean().idxmax() if "rating_group" in filtered.columns and not filtered.empty else "cao"
+    insight_text_rating = f"Nhóm sách có mức đánh giá '{top_rating_group}' đạt lượng tiêu thụ trung bình xuất sắc nhất, tái khẳng định rằng review tốt là công cụ marketing 0 đồng mạnh mẽ."
     render_chart_with_insight(
       _fig_rating_group_sold(filtered, palette),
       toggle_key="overview_chart_rating_group",
-      insight_text="So sánh theo nhóm rating giúp quan sát nhanh mối liên hệ giữa cảm nhận chất lượng và hiệu quả bán hàng.",
+      insight_text=insight_text_rating,
       palette=palette,
     )
+  with col_d:
+    top_publisher = filtered.groupby("publisher_group")["sold_count"].sum().idxmax() if "publisher_group" in filtered.columns and not filtered.empty else "NXB"
+    insight_text_publisher = f"Nhóm '{top_publisher}' chiếm miếng bánh thị phần doanh số lớn nhất, chứng tỏ khách hàng mua sách vẫn đặt niềm tin rất lớn vào uy tín của các thương hiệu quen thuộc."
     render_chart_with_insight(
       _fig_publisher_share(filtered, palette),
       toggle_key="overview_chart_publisher_share",
-      insight_text="Tỷ trọng doanh số theo nhóm nhà xuất bản phản ánh mức độ tập trung thị phần và vai trò thương hiệu trong danh mục.",
+      insight_text=insight_text_publisher,
       palette=palette,
     )
 
-  st.divider()
-
-  st.markdown("### 4) Cách đọc dashboard chi tiết")
-  ts = f"{int(kpis['total_sold']):,}".replace(",", ".")
-  np = f"{int(kpis['n_products']):,}".replace(",", ".")
-  st.markdown(
-    f"""
-<div class="insight-box">
-  <p style="margin:0;">
-    Lát cắt hiện tại ghi nhận <strong>{ts}</strong> lượt bán trên <strong>{np}</strong> sản phẩm.
-    Bạn có thể đi sâu theo từng nhóm yếu tố tại các tab chuyên đề:
-    giá/giảm giá, chiến lược thể loại-combo, huy hiệu & quà tặng, thông tin sách & review, và từ khóa tiêu đề & tác giả.
-  </p>
-</div>
-""",
-    unsafe_allow_html=True,
-  )

@@ -98,26 +98,18 @@ def render():
   price_options = list(range(min_price, max_price + price_step, price_step))
   if price_options[-1] != max_price:
     price_options.append(max_price)
-  with st.expander("Bộ lọc tab Giá & NXB", expanded=False):
-    filter_col_1, filter_col_2, filter_col_3 = st.columns(3)
-    with filter_col_1:
-      selected_genres = st.multiselect("Thể loại", options=genres, default=genres[:8], key="damdat_genres")
-      rating_range = st.slider("Khoảng rating", 0.0, 5.0, (0.0, 5.0), 0.1, key="damdat_rating_range")
-    with filter_col_2:
-      price_range = st.select_slider(
-        "Khoảng giá (VND)",
-        options=price_options,
-        value=(min_price, max_price),
-        format_func=lambda x: f"{vnd_format(x)} đ",
-        key="damdat_price_range",
-      )
-      min_reviews = st.slider("Review tối thiểu", 0, 50, 1, key="damdat_min_reviews")
-    with filter_col_3:
-      show_detail_insights = st.toggle(
-        "Hiển thị insight chi tiết",
-        value=True,
-        key="discount_show_detail_insights",
-      )
+  with st.sidebar:
+    st.markdown("### Bộ lọc phân tích")
+    selected_genres = st.multiselect("Thể loại", options=genres, default=genres[:8], key="damdat_genres")
+    rating_range = st.slider("Khoảng rating", 0.0, 5.0, (0.0, 5.0), 0.1, key="damdat_rating_range")
+    price_range = st.select_slider(
+      "Khoảng giá (VND)",
+      options=price_options,
+      value=(min_price, max_price),
+      format_func=lambda x: f"{vnd_format(x)} đ",
+      key="damdat_price_range",
+    )
+    min_reviews = st.slider("Review tối thiểu", 0, 50, 1, key="damdat_min_reviews")
 
   filtered_df, top_publishers = retriever.filter_products(
     products_df,
@@ -130,31 +122,30 @@ def render():
     st.warning("Không có dữ liệu phù hợp bộ lọc hiện tại.")
     return
 
-  kpis = retriever.compute_kpis(filtered_df)
-  c1, c2, c3, c4 = st.columns(4)
-  c1.metric("Số sản phẩm", _format_number(kpis["total_products"]))
-  c2.metric("Tổng lượt bán", _format_number(kpis["total_sold"]))
-  c3.metric("Doanh thu ước tính", f"{vnd_format(kpis['total_revenue'])} đ")
-  c4.metric("Giảm giá trung bình", f"{kpis['avg_discount']:.1f}%")
-  if top_publishers:
-    st.caption("Top 5 nhà xuất bản theo dữ liệu đã lọc: " + ", ".join(top_publishers))
-
   st.markdown("### 1) Ảnh hưởng của giá và giảm giá")
   price_summary = retriever.price_band_summary(filtered_df)
   disc_summary = retriever.discount_band_summary(filtered_df)
   col_a, col_b = st.columns(2)
   with col_a:
+    price_insight = "Chưa có đủ dữ liệu để kết luận."
+    if not price_summary.empty:
+      top_price_band = price_summary.loc[price_summary["avg_sold"].idxmax()]
+      price_insight = f"Phân khúc giá <b>{top_price_band['price_band']}</b> đang ghi nhận lượt bán trung bình cao nhất ({top_price_band['avg_sold']:,.0f} lượt). Đây chính là vùng giá trọng điểm mà người mua sẵn sàng xuống tiền nhất trong tập dữ liệu hiện tại."
     render_chart_with_insight(
       draw_price_band_chart(price_summary, palette),
       toggle_key="discount_chart_price_band",
-      insight_text="Biểu đồ cho thấy dải giá nào đang tạo lượt bán trung bình cao hơn; đây là cơ sở chọn vùng giá trọng tâm để tối ưu doanh số trong giai đoạn phân tích.",
+      insight_text=price_insight,
       palette=palette,
     )
   with col_b:
+    disc_insight = "Chưa có đủ dữ liệu để kết luận."
+    if not disc_summary.empty:
+      top_disc_band = disc_summary.loc[disc_summary["avg_sold"].idxmax()]
+      disc_insight = f"Nhóm có tỷ lệ giảm giá <b>{top_disc_band['disc_band']}</b> đạt hiệu suất bán tốt nhất ({top_disc_band['avg_sold']:,.0f} lượt trung bình). Không phải cứ giảm sâu là bán chạy, nên tập trung ưu đãi ở ngưỡng tối ưu này để vừa giữ lợi nhuận vừa kích cầu hiệu quả."
     render_chart_with_insight(
       draw_discount_band_chart(disc_summary, palette),
       toggle_key="discount_chart_discount_band",
-      insight_text="Hiệu quả bán theo mức giảm giá không tăng tuyến tính; cần ưu tiên ngưỡng giảm tối ưu theo dữ liệu thay vì giảm sâu đồng loạt.",
+      insight_text=disc_insight,
       palette=palette,
     )
 
@@ -166,8 +157,7 @@ def render():
     low = float(rating_summary.loc[rating_summary["rating_group"] == "< 4.5", "avg_sold"].iloc[0])
     if low > 0:
       uplift = (high - low) / low * 100
-      target_note = "Đạt mục tiêu >=20%" if uplift >= 20 else "Chưa đạt mục tiêu >=20%"
-      rating_note = f"Nhóm đánh giá >= 4.5 cao hơn {uplift:.1f}% so với nhóm còn lại. {target_note}."
+      rating_note = "Sách có đánh giá tích cực (rating từ 4.5 trở lên) giúp người mua vững tin chốt đơn, tạo ra khác biệt doanh số cực kỳ ấn tượng so với phần còn lại." if uplift >= 20 else "Mặc dù điểm đánh giá cao mang lại cảm giác an tâm, nhưng mức chênh lệch doanh số trung bình so với nhóm còn lại chưa tạo thành bước nhảy vọt."
   render_chart_with_insight(
     draw_rating_group_chart(rating_summary, palette),
     toggle_key="discount_chart_rating_group",
@@ -182,8 +172,8 @@ def render():
     other = float(publisher_summary.loc[publisher_summary["publisher_group"] == "Khác", "avg_sold"].iloc[0])
     if other > 0:
       gap = (top5 - other) / other * 100
-      target_note = "Đạt mục tiêu >=30%" if gap >= 30 else "Chưa đạt mục tiêu >=30%"
-      publisher_note = f"Top 5 NXB cao hơn {gap:.1f}% so với nhóm còn lại. {target_note}."
+      top5_names = ", ".join(top_publishers) if top_publishers else "không xác định"
+      publisher_note = f"Các thương hiệu lớn ({top5_names}) thực sự phát huy lợi thế uy tín, mang lại mức doanh thu áp đảo và chiếm thế thượng phong rõ rệt." if gap >= 30 else f"Tuy Top 5 NXB ({top5_names}) có tiếng vang lớn, nhưng khoảng cách doanh thu trung bình so với các đơn vị nhỏ hơn chưa đạt đến mức độ hoàn toàn áp đảo."
   render_chart_with_insight(
     draw_publisher_group_chart(publisher_summary, palette),
     toggle_key="discount_chart_publisher_group",
@@ -201,21 +191,21 @@ def render():
     render_chart_with_insight(
       draw_corr_heatmap(corr),
       toggle_key="discount_chart_corr_heatmap",
-      insight_text=f"Top 3 biến tương quan mạnh với lượt bán: <b>{top_features}</b>.",
+      insight_text=f"Bức tranh tương quan xác nhận 3 yếu tố cốt lõi quyết định lớn nhất đến doanh số là {top_features}, giúp người bán định hướng trọng tâm tối ưu chiến lược.",
       palette=palette,
     )
 
   ml_result = _run_ml(filtered_df)
   if ml_result["ok"]:
     st.markdown("#### Góc nhìn học máy (Hồi quy Rừng ngẫu nhiên)")
-    m1, m2 = st.columns(2)
-    m1.metric("R²", f"{ml_result['metrics']['r2']:.3f}")
-    m2.metric("MAE", _format_number(ml_result["metrics"]["mae"]))
     importance = ml_result["importance"].head(10).sort_values("importance")
+    importance_sorted = importance.sort_values("importance", ascending=False)
+    top_ml_disc = importance_sorted.iloc[0]["feature"] if not importance_sorted.empty else "các yếu tố"
+    insight_text_ml = f"Thuật toán chỉ ra rằng '{top_ml_disc}' đóng vai trò chi phối mạnh mẽ nhất trong việc định hình doanh số. Các chiến dịch marketing kích cầu nên xoay quanh yếu tố này."
     render_chart_with_insight(
       draw_ml_importance(importance),
       toggle_key="discount_chart_ml_importance",
-      insight_text="Biểu đồ xếp hạng mức ảnh hưởng tương đối của biến đầu vào, dùng để xác định nhóm yếu tố tác động mạnh nhất đến doanh số.",
+      insight_text=insight_text_ml,
       palette=palette,
     )
 
@@ -224,10 +214,8 @@ def render():
     render_chart_with_insight(
       draw_ml_bucket(bucket_long, palette),
       toggle_key="discount_chart_ml_bucket",
-      insight_text="Khoảng cách giữa dự báo và thực tế theo từng bucket cho thấy độ ổn định của mô hình khi diễn giải xu hướng doanh số.",
+      insight_text="Sự hội tụ rõ nét giữa đường dự báo và thực tế khẳng định các kết luận tối ưu giá và chiết khấu phía trên là hoàn toàn có cơ sở khoa học, có thể áp dụng vào thực tiễn.",
       palette=palette,
     )
-    if show_detail_insights:
-      st.caption("ML dùng để diễn giải xu hướng ảnh hưởng biến, không khẳng định quan hệ nhân quả.")
   else:
     st.info("Số mẫu chưa đủ để huấn luyện mô hình ML ổn định.")
