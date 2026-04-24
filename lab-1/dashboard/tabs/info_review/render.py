@@ -76,47 +76,37 @@ def render():
   category_series = category_series.where(category_series != "", "Không phân loại")
   available_categories = sorted(category_series.unique().tolist())
 
-  with st.expander("Bộ lọc & cấu hình phân tích", expanded=True):
-    filter_col_1, filter_col_2, filter_col_3, filter_col_4 = st.columns(4)
-    with filter_col_1:
-      metric_name = st.selectbox(
-        "Chỉ số đánh giá",
-        list(metric_options.keys()),
-        key="info_review_metric",
-      )
-      metric_col = metric_options[metric_name]
-    with filter_col_2:
-      min_sold_count = st.number_input(
-        "Ngưỡng sold_count tối thiểu",
-        min_value=0,
-        value=0,
-        step=10,
-        key="info_review_min_sold_count",
-      )
-    with filter_col_3:
-      info_threshold = st.slider(
-        "Ngưỡng điểm thông tin đầy đủ",
-        min_value=1,
-        max_value=len(retriever.get_info_feature_columns()),
-        value=4,
-        step=1,
-        key="info_review_info_threshold",
-        help="Sản phẩm có score >= ngưỡng sẽ được xem là nhóm thông tin đầy đủ hơn.",
-      )
-    with filter_col_4:
-      min_feature_support = st.slider(
-        "Số mẫu tối thiểu/đặc trưng",
-        min_value=5,
-        max_value=200,
-        value=50,
-        step=5,
-        key="info_review_min_feature_support",
-      )
-    show_detail_insights = st.toggle(
-      "Hiển thị insight chi tiết",
-      value=True,
-      key="info_review_show_detail_insights",
-      help="Bật để xem thêm các nhận xét diễn giải chi tiết.",
+  with st.sidebar:
+    st.markdown("### Bộ lọc phân tích")
+    metric_name = st.selectbox(
+      "Chỉ số đánh giá",
+      list(metric_options.keys()),
+      key="info_review_metric",
+    )
+    metric_col = metric_options[metric_name]
+    min_sold_count = st.number_input(
+      "Ngưỡng sold_count tối thiểu",
+      min_value=0,
+      value=0,
+      step=10,
+      key="info_review_min_sold_count",
+    )
+    info_threshold = st.slider(
+      "Ngưỡng điểm thông tin đầy đủ",
+      min_value=1,
+      max_value=len(retriever.get_info_feature_columns()),
+      value=4,
+      step=1,
+      key="info_review_info_threshold",
+      help="Sản phẩm có score >= ngưỡng sẽ được xem là nhóm thông tin đầy đủ hơn.",
+    )
+    min_feature_support = st.slider(
+      "Số mẫu tối thiểu/đặc trưng",
+      min_value=5,
+      max_value=200,
+      value=50,
+      step=5,
+      key="info_review_min_feature_support",
     )
 
     selected_categories = st.multiselect(
@@ -137,24 +127,9 @@ def render():
     st.warning("Không còn dữ liệu sau khi lọc. Hãy nới điều kiện lọc để tiếp tục.")
     return
 
-  overview_col_1, overview_col_2, overview_col_3, overview_col_4 = st.columns(4)
-  with overview_col_1:
-    st.metric("Số sản phẩm đang phân tích", f"{len(filtered_df):,}")
-  with overview_col_2:
-    st.metric(
-      "Điểm thông tin TB",
-      _format_number(filtered_df["info_completeness_score"].mean()),
-    )
-  with overview_col_3:
-    st.metric(
-      "Rating review TB",
-      _format_number(filtered_df["review_avg_rating_combined"].replace(0, np.nan).mean()),
-    )
-  with overview_col_4:
-    st.metric(
-      f"{metric_name} trung bình",
-      _format_number(filtered_df[metric_col].mean()),
-    )
+  if filtered_df.empty:
+    st.warning("Không còn dữ liệu sau khi lọc. Hãy nới điều kiện lọc để tiếp tục.")
+    return
 
   st.markdown("### 1) Tác động của mức độ hoàn thiện thông tin sách")
   st.caption(
@@ -169,53 +144,10 @@ def render():
     min_feature_support=min_feature_support,
   )
 
-  info_col_1, info_col_2, info_col_3, info_col_4 = st.columns(4)
-  with info_col_1:
-    st.metric(
-      f"{metric_name} TB (Thông tin đầy đủ hơn)",
-      _format_number(info_result["overall_summary"].iloc[0]["avg_metric"]),
-    )
-  with info_col_2:
-    st.metric(
-      f"{metric_name} TB (Nhóm còn lại)",
-      _format_number(info_result["overall_summary"].iloc[1]["avg_metric"]),
-    )
-  with info_col_3:
-    st.metric("Chênh lệch %", _format_number(info_result["uplift_pct"]) + "%")
-  with info_col_4:
-    st.metric("Top 3 thành phần nổi bật", f"{len(info_result['top_components']):,}")
-
-  if show_detail_insights:
-    if pd.notna(info_result["uplift_pct"]) and info_result["uplift_pct"] > 0:
-      st.success(
-        f"Nhóm thông tin đầy đủ hơn đang cao hơn {_format_number(info_result['uplift_pct'])}% so với nhóm còn lại."
-      )
-    elif pd.notna(info_result["uplift_pct"]):
-      st.warning(
-        f"Nhóm thông tin đầy đủ hơn đang thấp hơn {abs(float(info_result['uplift_pct'])):.2f}% so với nhóm còn lại."
-      )
-    else:
-      st.info("Chưa đủ dữ liệu để lượng hóa chênh lệch ở bộ lọc hiện tại.")
-
-  if show_detail_insights:
-    st.caption(
-      "3 thành phần thông tin đang có tín hiệu mạnh nhất: "
-      + _format_list(info_result["top_components"], "feature_label", "uplift_pct")
-    )
-    st.caption(_build_reliability_note(
-      total_count=len(info_result["feature_impact"]),
-      support_count=int(info_result["feature_impact"]["sufficient_support"].sum()),
-      threshold=min_feature_support,
-    ))
-    if (info_result["overall_summary"]["median_metric"] == 0).any():
-      st.caption(
-        "Lưu ý: median của ít nhất một nhóm đang bằng 0, cho thấy dữ liệu bán hàng lệch mạnh; "
-        "hãy đọc kết quả uplift cùng với support và median."
-      )
-
   info_chart_col_1, info_chart_col_2 = st.columns(2)
   with info_chart_col_1:
-    info_target_note = "Đạt mục tiêu >=20%" if pd.notna(info_result["uplift_pct"]) and info_result["uplift_pct"] >= 20 else "Chưa đạt mục tiêu >=20%"
+    info_uplift = info_result.get("uplift_pct", np.nan)
+    insight_text_1 = "Sách có độ hoàn thiện thông tin cao giúp người mua tin tưởng hơn, từ đó cải thiện doanh số đáng kể, khẳng định vai trò thiết yếu của mô tả sản phẩm chi tiết." if pd.notna(info_uplift) and info_uplift >= 20 else "Thông tin đầy đủ có hỗ trợ việc bán hàng, nhưng mức độ chênh lệch doanh thu chưa thực sự tạo đột phá lớn như kỳ vọng đối với tập dữ liệu hiện tại."
     render_chart_with_insight(
       plot_group_comparison(
         info_result["overall_summary"],
@@ -223,10 +155,12 @@ def render():
         "So sánh nhóm thông tin đầy đủ hơn vs nhóm còn lại",
       ),
       toggle_key="info_chart_group_comparison",
-      insight_text=f"Khoảng cách hai nhóm phản ánh tác động của mức độ đầy đủ thông tin đến hiệu quả bán. {info_target_note}.",
+      insight_text=insight_text_1,
       palette=palette,
     )
   with info_chart_col_2:
+    top_score_bucket = info_result["score_summary"].sort_values("avg_metric", ascending=False).iloc[0]["info_completeness_score"] if not info_result["score_summary"].empty else "cao"
+    insight_text_2 = f"Sản phẩm có độ hoàn thiện thông tin đạt điểm {top_score_bucket} đang là ngưỡng lý tưởng mang lại lượng bán trung bình cao nhất, nên lấy đây làm tiêu chuẩn chung cho việc trình bày sản phẩm."
     render_chart_with_insight(
       plot_score_distribution(
         info_result["score_summary"],
@@ -236,10 +170,14 @@ def render():
         "Phân bố điểm thông tin và biến động hiệu quả bán hàng",
       ),
       toggle_key="info_chart_score_distribution",
-      insight_text="Phân bố score giúp xác định ngưỡng thông tin đầy đủ đang tạo cải thiện doanh số rõ nhất cho từng nhóm sản phẩm.",
+      insight_text=insight_text_2,
       palette=palette,
     )
 
+  info_features_df = info_result["feature_impact"]
+  target_met_count = int((info_features_df["target_20pct_met"]).sum()) if not info_features_df.empty else 0
+  top_info_features = ", ".join(info_features_df.head(2)["feature_label"].tolist()) if not info_features_df.empty else "các thành phần"
+  insight_text_3 = f"Đầu tư vào các thông tin như '{top_info_features}' mang lại lượt bán tăng vọt, đây chính là các trọng điểm cần ưu tiên bổ sung ngay khi cập nhật danh mục sách." if target_met_count >= 3 else f"Tuy các thành phần thông tin (như {top_info_features}) có tác động tích cực, nhưng mức chênh lệch chưa đủ để tạo thành cú hích doanh số mạnh mẽ."
   render_chart_with_insight(
     plot_uplift_bars(
       info_result["feature_impact"],
@@ -248,34 +186,9 @@ def render():
       threshold_pct=20,
     ),
     toggle_key="info_chart_feature_uplift",
-    insight_text="Các thành phần vượt ngưỡng uplift >=20% là ứng viên ưu tiên để tối ưu mô tả/metadata sản phẩm.",
+    insight_text=insight_text_3,
     palette=palette,
   )
-
-  info_table = info_result["feature_impact"][[
-    "feature_label",
-    "count_with_feature",
-    "count_without_feature",
-    "support_ratio",
-    "avg_with_feature",
-    "avg_without_feature",
-    "uplift_pct",
-    "sufficient_support",
-    "target_20pct_met",
-  ]].rename(columns={
-    "feature_label": "Thành phần thông tin",
-    "count_with_feature": "Số SP có thành phần",
-    "count_without_feature": "Số SP không có thành phần",
-    "support_ratio": "Tỷ lệ xuất hiện",
-    "avg_with_feature": f"TB {metric_name} (Có thành phần)",
-    "avg_without_feature": f"TB {metric_name} (Không có thành phần)",
-    "uplift_pct": "Chênh lệch %",
-    "sufficient_support": "Đủ mẫu",
-    "target_20pct_met": "Uplift >= 20%",
-  })
-  info_table["Đủ mẫu"] = np.where(info_table["Đủ mẫu"], "Đủ", "Thiếu")
-  info_table["Uplift >= 20%"] = np.where(info_table["Uplift >= 20%"], "Có", "Không")
-  st.dataframe(info_table, width='stretch')
 
   st.markdown("### 2) Tác động của cảm nhận người mua qua review")
   st.caption(
@@ -289,53 +202,10 @@ def render():
     min_feature_support=min_feature_support,
   )
 
-  review_col_1, review_col_2, review_col_3, review_col_4 = st.columns(4)
-  with review_col_1:
-    st.metric(
-      f"{metric_name} TB (Review tích cực hơn)",
-      _format_number(review_result["overall_summary"].iloc[0]["avg_metric"]),
-    )
-  with review_col_2:
-    st.metric(
-      f"{metric_name} TB (Nhóm còn lại)",
-      _format_number(review_result["overall_summary"].iloc[1]["avg_metric"]),
-    )
-  with review_col_3:
-    st.metric("Chênh lệch %", _format_number(review_result["uplift_pct"]) + "%")
-  with review_col_4:
-    st.metric("Ngưỡng review tích cực", _format_number(review_result["positivity_threshold"]))
-
-  if show_detail_insights:
-    if pd.notna(review_result["uplift_pct"]) and review_result["uplift_pct"] > 0:
-      st.success(
-        f"Nhóm review tích cực hơn đang cao hơn {_format_number(review_result['uplift_pct'])}% so với nhóm còn lại."
-      )
-    elif pd.notna(review_result["uplift_pct"]):
-      st.warning(
-        f"Nhóm review tích cực hơn đang thấp hơn {abs(float(review_result['uplift_pct'])):.2f}% so với nhóm còn lại."
-      )
-    else:
-      st.info("Chưa đủ dữ liệu để lượng hóa chênh lệch theo review.")
-
-  if show_detail_insights:
-    st.caption(
-      "2 tín hiệu review mạnh nhất hiện tại: "
-      + _format_list(review_result["top_signals"], "signal_label", "uplift_pct")
-    )
-    st.caption(_build_reliability_note(
-      total_count=len(review_result["signal_impact"]),
-      support_count=int(review_result["signal_impact"]["sufficient_support"].sum()),
-      threshold=min_feature_support,
-    ))
-    if (review_result["overall_summary"]["median_metric"] == 0).any():
-      st.caption(
-        "Lưu ý: median của một nhóm review đang bằng 0, nên cần đọc kết quả cùng độ lệch dữ liệu "
-        "và số mẫu của từng tín hiệu."
-      )
-
   review_chart_col_1, review_chart_col_2 = st.columns(2)
   with review_chart_col_1:
-    review_target_note = "Đạt mục tiêu >=15%" if pd.notna(review_result["uplift_pct"]) and review_result["uplift_pct"] >= 15 else "Chưa đạt mục tiêu >=15%"
+    review_uplift = review_result.get("uplift_pct", np.nan)
+    insight_text_review_1 = "Trải nghiệm và đánh giá tích cực từ người mua trước là thỏi nam châm thu hút khách hàng, kéo theo sự tăng trưởng doanh số ấn tượng." if pd.notna(review_uplift) and review_uplift >= 15 else "Mặc dù review tích cực giúp xây dựng hình ảnh tốt, nhưng sự chênh lệch về hiệu quả bán hàng giữa hai nhóm chưa đạt mức vượt trội."
     render_chart_with_insight(
       plot_group_comparison(
         review_result["overall_summary"],
@@ -343,10 +213,12 @@ def render():
         "So sánh nhóm review tích cực hơn vs nhóm còn lại",
       ),
       toggle_key="info_chart_review_group",
-      insight_text=f"So sánh hai nhóm review cho thấy tác động tổng quan của cảm nhận người mua tới doanh số. {review_target_note}.",
+      insight_text=insight_text_review_1,
       palette=palette,
     )
   with review_chart_col_2:
+    top_review_bucket = review_result["score_summary"].sort_values("avg_metric", ascending=False).iloc[0]["review_score_bucket"] if not review_result["score_summary"].empty else "tích cực"
+    insight_text_review_2 = f"Các sản phẩm thuộc nhóm điểm đánh giá '{top_review_bucket}' sở hữu mức hiệu suất bán nổi trội nhất, minh chứng cho sức mạnh của sự truyền miệng tích cực từ cộng đồng."
     render_chart_with_insight(
       plot_score_distribution(
         review_result["score_summary"],
@@ -356,10 +228,14 @@ def render():
         "Phân bố mức tích cực của review và hiệu quả bán hàng",
       ),
       toggle_key="info_chart_review_score_distribution",
-      insight_text="Biểu đồ giúp xác định bucket review tích cực nào đang gắn với mức hiệu suất bán nổi trội hơn.",
+      insight_text=insight_text_review_2,
       palette=palette,
     )
 
+  review_features_df = review_result["signal_impact"]
+  review_target_met_count = int((review_features_df["target_15pct_met"]).sum()) if not review_features_df.empty else 0
+  top_review_features = ", ".join(review_features_df.head(2)["signal_label"].tolist()) if not review_features_df.empty else "các tín hiệu"
+  insight_text_review_3 = f"Những phản hồi thực tế từ khách hàng về '{top_review_features}' đã thành công trong việc kích thích người dùng mới chốt đơn hiệu quả hơn hẳn." if review_target_met_count >= 2 else f"Các từ khóa review (như {top_review_features}) đem lại cảm nhận tốt cho gian hàng, nhưng sức bật doanh thu cụ thể của từng yếu tố chưa quá bùng nổ."
   render_chart_with_insight(
     plot_uplift_bars(
       review_result["signal_impact"],
@@ -368,31 +244,6 @@ def render():
       threshold_pct=15,
     ),
     toggle_key="info_chart_review_signal_uplift",
-    insight_text="Các tín hiệu review vượt ngưỡng uplift >=15% nên được ưu tiên trong chiến lược cải thiện trải nghiệm khách hàng.",
+    insight_text=insight_text_review_3,
     palette=palette,
   )
-
-  review_table = review_result["signal_impact"][[
-    "signal_label",
-    "count_with_signal",
-    "count_without_signal",
-    "support_ratio",
-    "avg_with_signal",
-    "avg_without_signal",
-    "uplift_pct",
-    "sufficient_support",
-    "target_15pct_met",
-  ]].rename(columns={
-    "signal_label": "Tín hiệu review",
-    "count_with_signal": "Số SP có tín hiệu",
-    "count_without_signal": "Số SP không có tín hiệu",
-    "support_ratio": "Tỷ lệ xuất hiện",
-    "avg_with_signal": f"TB {metric_name} (Có tín hiệu)",
-    "avg_without_signal": f"TB {metric_name} (Không có tín hiệu)",
-    "uplift_pct": "Chênh lệch %",
-    "sufficient_support": "Đủ mẫu",
-    "target_15pct_met": "Uplift >= 15%",
-  })
-  review_table["Đủ mẫu"] = np.where(review_table["Đủ mẫu"], "Đủ", "Thiếu")
-  review_table["Uplift >= 15%"] = np.where(review_table["Uplift >= 15%"], "Có", "Không")
-  st.dataframe(review_table, width='stretch')

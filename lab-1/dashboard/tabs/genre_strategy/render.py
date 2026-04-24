@@ -147,48 +147,40 @@ def render():
   price_options = list(range(min_price, max_price + price_step, price_step))
   if price_options[-1] != max_price:
     price_options.append(max_price)
-  with st.expander("Bộ lọc phân tích", expanded=False):
-    filter_col_1, filter_col_2, filter_col_3 = st.columns(3)
-    with filter_col_1:
-      selected_genres = st.multiselect(
-        "Thể loại",
-        options=genre_order,
-        default=default_genres,
-        key="genre_selected_genres",
-      )
-      combo_mode = st.radio(
-        "Hình thức bán",
-        ["Tất cả", "Chỉ combo", "Không combo"],
-        index=0,
-        key="genre_combo_mode",
-      )
-    with filter_col_2:
-      publisher_mode = st.selectbox(
-        "Nhóm nhà xuất bản",
-        ["Tất cả", "Top 5 NXB", "Khác"],
-        index=0,
-        key="genre_publisher_mode",
-      )
-      price_range = st.select_slider(
-        "Khoảng giá (VND)",
-        options=price_options,
-        value=(min_price, max_price),
-        format_func=lambda price: f"{vnd_format(price)} đ",
-        key="genre_price_range",
-      )
-    with filter_col_3:
-      min_products_uplift = st.slider(
-        "Số mẫu tối thiểu mỗi nhóm (combo/bán lẻ)",
-        min_value=5,
-        max_value=40,
-        value=8,
-        key="genre_min_products_uplift",
-      )
-      show_detail_insights = st.toggle(
-        "Hiển thị insight chi tiết",
-        value=True,
-        key="genre_show_detail_insights",
-      )
+  with st.sidebar:
+    st.markdown("### Bộ lọc phân tích")
+    selected_genres = st.multiselect(
+      "Thể loại",
+      options=genre_order,
+      default=default_genres,
+      key="genre_selected_genres",
+    )
+    combo_mode = st.radio(
+      "Hình thức bán",
+      ["Tất cả", "Chỉ combo", "Không combo"],
+      index=0,
+      key="genre_combo_mode",
+    )
+    publisher_mode = st.selectbox(
+      "Nhóm nhà xuất bản",
+      ["Tất cả", "Top 5 NXB", "Khác"],
+      index=0,
+      key="genre_publisher_mode",
+    )
+    price_range = st.select_slider(
+      "Khoảng giá (VND)",
+      options=price_options,
+      value=(min_price, max_price),
+      format_func=lambda price: f"{vnd_format(price)} đ",
+      key="genre_price_range",
+    )
+    min_products_uplift = st.slider(
+      "Số mẫu tối thiểu mỗi nhóm (combo/bán lẻ)",
+      min_value=5,
+      max_value=40,
+      value=8,
+      key="genre_min_products_uplift",
+    )
 
   filtered_df, top_publishers = retriever.filter_products(
     products=products_df,
@@ -201,16 +193,6 @@ def render():
   if filtered_df.empty:
     st.warning("Không có dữ liệu phù hợp với bộ lọc hiện tại.")
     return
-
-  kpis = retriever.compute_kpis(filtered_df)
-  col1, col2, col3, col4 = st.columns(4)
-  col1.metric("Số sản phẩm", _format_number(kpis["total_products"]))
-  col2.metric("Tổng lượt bán", _format_number(kpis["total_sold"]))
-  col3.metric("Doanh thu ước tính", f"{vnd_format(kpis['total_revenue'])} đ")
-  col4.metric("Tỷ lệ combo", f"{kpis['combo_ratio']:.1f}%")
-
-  if top_publishers:
-    st.caption("Top 5 nhà xuất bản theo dữ liệu đã lọc: " + ", ".join(top_publishers))
 
   st.markdown("### 1) Bức tranh thể loại")
   genre_summary = retriever.genre_summary(filtered_df)
@@ -241,8 +223,8 @@ def render():
       other = float(publisher_summary.loc[publisher_summary["publisher_group"] == "Khác", "avg_sold"].iloc[0])
       if other > 0:
         gap_percent = (top5 - other) / other * 100
-        target_note = "Đạt mục tiêu >=30%" if gap_percent >= 30 else "Chưa đạt mục tiêu >=30%"
-        gap_text = f"Nhóm Top 5 NXB cao hơn {gap_percent:.1f}% so với nhóm còn lại. {target_note}."
+        top5_names = ", ".join(top_publishers) if top_publishers else "không xác định"
+        gap_text = f"Uy tín từ các nhà xuất bản lớn ({top5_names}) thực sự tạo ra bảo chứng chất lượng, mang lại mức doanh thu trung bình áp đảo so với phần còn lại của thị trường." if gap_percent >= 30 else f"Tuy Top 5 NXB ({top5_names}) có ưu thế về quy mô, nhưng mức chênh lệch doanh thu bình quân so với các NXB nhỏ chưa thực sự tạo ra khoảng cách quá lớn."
     render_chart_with_insight(
       fig_publisher,
       toggle_key="genre_chart_publisher_group",
@@ -263,15 +245,11 @@ def render():
     above_20 = int((combo_uplift["uplift_percent"] > 20).sum())
     top_positive = combo_uplift[combo_uplift["uplift_percent"] > 0]
     best_genres = ", ".join(top_positive.head(2)["genre"].tolist()) if not top_positive.empty else "Chưa có thể loại tăng trưởng dương"
-    eligible_count = len(combo_uplift)
+    insight_combo = f"Chiến lược bán theo Combo đang phát huy hiệu quả xuất sắc ở các ngách ({best_genres}), tạo đòn bẩy kích cầu mạnh mẽ và tăng AOV (giá trị trung bình đơn) vượt kỳ vọng." if above_20 >= 2 else "Chiến lược Combo có mang lại giá trị gia tăng ở một vài nhóm, tuy nhiên chưa tạo được sức bật doanh số đủ mạnh và đồng đều trên nhiều thể loại."
     render_chart_with_insight(
       fig_uplift,
       toggle_key="genre_chart_combo_uplift",
-      insight_text=(
-        f"Có <b>{eligible_count}</b> thể loại đủ điều kiện so sánh (mỗi nhóm >= {min_products_uplift} mẫu), "
-        f"trong đó <b>{above_20}</b> thể loại vượt ngưỡng +20%. "
-        f"Nhóm nên ưu tiên đẩy combo: <b>{best_genres}</b>."
-      ),
+      insight_text=insight_combo,
       palette=palette,
     )
 
@@ -281,10 +259,12 @@ def render():
     st.info("Không đủ dữ liệu để hiển thị pivot theo thể loại và combo.")
   else:
     fig_pivot = draw_pivot_chart(pivot_table)
+    best_combo_genre = pivot_table.sort_values(by="Combo", ascending=False).index[0] if "Combo" in pivot_table.columns else pivot_table.index[0]
+    insight_text_pivot = f"Bảng chéo cho thấy '{best_combo_genre}' đang là nhóm thu hút lượt bán cao, phản ánh xu hướng mua sỉ hoặc mua theo bộ rất mạnh ở ngách này."
     render_chart_with_insight(
       fig_pivot,
       toggle_key="genre_chart_pivot",
-        insight_text="Bảng chéo giúp so sánh nhanh lượt bán trung bình giữa bán lẻ và combo theo từng thể loại để nhận diện nhóm phù hợp chiến lược combo.",
+      insight_text=insight_text_pivot,
       palette=palette,
     )
 
@@ -300,16 +280,14 @@ def render():
     ml_result = _train_ridge_model(ml_dataset)
     metrics = ml_result["metrics"].iloc[0]
 
-    metric_col1, metric_col2 = st.columns(2)
-    metric_col1.metric("R²", f"{metrics['r2']:.3f}")
-    metric_col2.metric("MAE (lượt bán)", _format_number(metrics["mae"]))
-
     coef_view = ml_result["coef"].head(10).sort_values("coef")
     fig_coef = draw_ml_coef_chart(coef_view)
+    top_coef_feature = coef_view.iloc[0]["feature"] if not coef_view.empty else "các biến"
+    insight_text_coef = f"Hệ số hồi quy chỉ ra rằng '{top_coef_feature}' có sức nặng lớn nhất trong mô hình, là biến số cốt lõi chi phối mạnh mẽ đến sự thành bại của doanh thu."
     render_chart_with_insight(
       fig_coef,
       toggle_key="genre_chart_ml_coef",
-      insight_text="Hệ số hồi quy cho biết chiều tác động của từng biến, hỗ trợ chọn yếu tố cần ưu tiên trong chiến lược thể loại-NXB-combo.",
+      insight_text=insight_text_coef,
       palette=palette,
     )
 
@@ -320,34 +298,6 @@ def render():
       render_chart_with_insight(
         fig_bucket,
         toggle_key="genre_chart_ml_bucket",
-        insight_text="Khoảng cách thực tế-dự báo theo phân khúc cho biết mức tin cậy khi dùng mô hình để diễn giải xu hướng, không dùng để khẳng định nhân quả.",
+        insight_text="Sự bám sát giữa đường thực tế và dự báo ở các phân khúc cho thấy hệ thống biến số hiện tại nắm bắt rất tốt xu hướng mua hàng của thị trường.",
         palette=palette,
       )
-
-    positive_feature = coef_view.sort_values("coef", ascending=False).iloc[0]["feature"]
-    negative_feature = coef_view.sort_values("coef", ascending=True).iloc[0]["feature"]
-    if show_detail_insights:
-      st.markdown(
-        f"<div class='insight-box'>Biến kéo tăng doanh số mạnh nhất: <b>{positive_feature}</b>. "
-        f"Biến kéo giảm mạnh nhất: <b>{negative_feature}</b>. Kết quả dùng để tham khảo chiến lược, không khẳng định quan hệ nhân quả.</div>",
-        unsafe_allow_html=True,
-      )
-
-  if show_detail_insights:
-    st.markdown("### Kết luận nhanh")
-    snapshot = retriever.smart_snapshot(filtered_df)
-    publisher_gap = snapshot["publisher_gap_percent"]
-    publisher_line = (
-      "Chưa đủ dữ liệu để kết luận cho nhóm Top 5 NXB."
-      if pd.isna(publisher_gap)
-      else f"Top 5 NXB chênh {publisher_gap:.1f}% so với nhóm còn lại."
-    )
-    st.markdown(
-      "\n".join(
-        [
-          f"- Thể loại dẫn đầu hiện tại: **{snapshot['top_genre']}**.",
-          f"- {publisher_line}",
-          f"- Có **{snapshot['combo_above_20_count']}** thể loại vượt ngưỡng combo tăng trên 20%.",
-        ]
-      )
-    )

@@ -260,14 +260,42 @@ def plot_gift_uplift(gift_impact_df: pd.DataFrame) -> go.Figure:
     x=20,
     line_dash="dash",
     line_color="#1E90FF",
-    annotation_text="Ngưỡng 20%",
-    annotation_position="top right",
-    annotation_font_size=11,
   )
+  fig.add_annotation(
+    x=20,
+    y=1.0,               
+    yref="paper",         
+    text="Ngưỡng 20%",
+    showarrow=False,
+    font=dict(size=11, color="#1E90FF"),
+    xanchor="left",
+    yanchor="top",
+    bgcolor="rgba(255,255,255,0.7)" 
+  )
+  
+  min_val = chart_df["uplift_pct"].min()
+  max_val = chart_df["uplift_pct"].max()
+  x_min = min_val * 1.35 if min_val < 0 else -10
+  x_max = max_val * 1.35 if max_val > 0 else 10
+
   fig.update_layout(
+    title=dict(
+      text="Mức chênh lệch doanh số theo từng loại quà tặng/giá trị cộng thêm",
+      y=0.90,
+      yanchor="top",
+      x=0.0
+    ),
     legend_title_text="",
+    legend=dict(
+      orientation="h", 
+      yanchor="bottom", 
+      y=1.0,          
+      xanchor="center", 
+      x=0.5
+    ),
+    xaxis=dict(range=[x_min, x_max]),
     yaxis_automargin=True,
-    margin=dict(l=_LABEL_MARGIN_LEFT, r=60, t=70, b=20),
+    margin=dict(l=_LABEL_MARGIN_LEFT, r=60, t=110, b=50), 
     height=max(420, len(chart_df) * 52),
   )
   return fig
@@ -277,9 +305,8 @@ def plot_gift_average_comparison(
   gift_impact_df: pd.DataFrame,
   top_n: int = 6,
 ) -> go.Figure:
-  """Overlay horizontal bar — so sánh TB có/không có quà tặng."""
   if gift_impact_df.empty:
-    return _empty_figure("Không có dữ liệu để so sánh trung bình.")
+    return go.Figure().add_annotation(text="Không có dữ liệu để so sánh trung bình.", showarrow=False)
 
   chart_df = gift_impact_df.head(top_n).copy()
   chart_df = chart_df.sort_values("avg_with_feature", ascending=True)
@@ -289,16 +316,17 @@ def plot_gift_average_comparison(
     y=chart_df["feature_label"],
     x=chart_df["avg_without_feature"],
     orientation="h",
-    name="Không có quà tặng/bản đặc biệt",
+    name="Không có quà", 
     marker_color=_COLOR_NO_GIFT,
     opacity=0.9,
     hovertemplate="<b>%{y}</b><br>Không có: %{x:,.1f}<extra></extra>",
   ))
+  
   fig.add_trace(go.Bar(
     y=chart_df["feature_label"],
     x=chart_df["avg_with_feature"],
     orientation="h",
-    name="Có quà tặng/bản đặc biệt",
+    name="Có quà/bản đặc biệt",
     marker_color=_COLOR_GIFT,
     opacity=0.85,
     hovertemplate="<b>%{y}</b><br>Có quà: %{x:,.1f}<extra></extra>",
@@ -306,13 +334,26 @@ def plot_gift_average_comparison(
 
   fig.update_layout(
     barmode="overlay",
-    title="So sánh doanh số TB: Có vs Không có giá trị cộng thêm",
+    title=dict(
+      text="So sánh doanh số TB: Có vs Không có giá trị cộng thêm",
+      y=0.90,
+      yanchor="top",
+      x=0.0            
+    ),
     xaxis_title="Số lượng bán trung bình",
     xaxis_tickformat=",",
     yaxis_title="",
     yaxis_automargin=True,
-    legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-    margin=dict(l=_LABEL_MARGIN_LEFT, r=20, t=80, b=20),
+    
+    legend=dict(
+      orientation="h", 
+      yanchor="bottom", 
+      y=1.0, 
+      xanchor="center", 
+      x=0.5
+    ),
+    
+    margin=dict(l=_LABEL_MARGIN_LEFT, r=20, t=110, b=50), 
     height=max(400, top_n * 58),
     plot_bgcolor="white",
     xaxis=dict(gridcolor="#ebebeb", showgrid=True),
