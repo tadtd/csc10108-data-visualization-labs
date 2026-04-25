@@ -191,10 +191,10 @@ def render() -> None:
   apply_common_style()
   _overview_styles()
 
-  st.subheader("Tổng quan")
-  st.caption(
-    "Bức tranh tổng thể về các yếu tố ảnh hưởng đến hiệu quả bán hàng sách trên Tiki."
-  )
+  # st.subheader("Tổng quan")
+  # st.caption(
+  #   "Bức tranh tổng thể về các yếu tố ảnh hưởng đến hiệu quả bán hàng sách trên Tiki."
+  # )
 
   try:
     raw = _load_products()
@@ -242,6 +242,18 @@ def render() -> None:
   filtered = _filter_products(raw, genres_sel, price_range[0], price_range[1])
   if not filtered.empty:
     filtered, _ = DiscountPublisherRetriever().with_publisher_group(filtered)
+
+  kpi = _kpi_snapshot(filtered)
+  st.markdown("### Tổng quan")
+  kpi_col_1, kpi_col_2, kpi_col_3, kpi_col_4 = st.columns(4)
+  with kpi_col_1:
+    st.metric("Số sản phẩm", f"{int(kpi['n_products']):,}".replace(",", "."))
+  with kpi_col_2:
+    st.metric("Tổng lượt bán", f"{int(kpi['total_sold']):,}".replace(",", "."))
+  with kpi_col_3:
+    st.metric("Rating TB", f"{kpi['avg_rating']:.2f}")
+  with kpi_col_4:
+    st.metric("Giá TB", f"{vnd_format(kpi['avg_price'])} đ")
 
 
 

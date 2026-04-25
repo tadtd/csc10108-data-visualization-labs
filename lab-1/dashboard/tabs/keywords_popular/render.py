@@ -6,7 +6,6 @@ import streamlit as st
 
 from .chart import (
   plot_author_group_comparison,
-  plot_author_popularity_scatter,
   plot_author_top_sales,
   plot_feature_average_comparison,
   plot_feature_uplift,
@@ -39,11 +38,11 @@ def _extract_group_value(group_summary_df: pd.DataFrame, group_name: str) -> flo
 
 def render():
   apply_common_style()
-  st.subheader("Từ khóa tiêu đề và độ phổ biến tác giả")
-  st.caption(
-    "Phân tích ảnh hưởng của đặc trưng tiêu đề và độ phổ biến tác giả "
-    "đến hiệu quả bán hàng của sách."
-  )
+  # st.subheader("Từ khóa tiêu đề và độ phổ biến tác giả")
+  # st.caption(
+  #   "Phân tích ảnh hưởng của đặc trưng tiêu đề và độ phổ biến tác giả "
+  #   "đến hiệu quả bán hàng của sách."
+  # )
 
   retriever = KeywordsPopularRetriever()
   color_mode = st.session_state.get("color_mode", "Mặc định")
@@ -134,6 +133,15 @@ def render():
     st.warning("Không còn dữ liệu sau khi lọc. Hãy nới lỏng điều kiện lọc để tiếp tục.")
     return
 
+  st.markdown("### Tổng quan")
+  kpi_col_1, kpi_col_2, kpi_col_3 = st.columns(3)
+  with kpi_col_1:
+    st.metric("Số mẫu", f"{len(filtered_df):,}".replace(",", "."))
+  with kpi_col_2:
+    st.metric("Lượt bán TB", _format_number(filtered_df["sold_count"].mean(), 1))
+  with kpi_col_3:
+    st.metric("Review TB", _format_number(filtered_df["review_count"].mean(), 1))
+
   st.markdown("### 1) Ảnh hưởng của từ khóa/mẫu tiêu đề đến doanh số")
   feature_impact_df = retriever.compute_feature_impact(
     filtered_df,
@@ -211,16 +219,9 @@ def render():
         palette=palette,
       )
 
-    render_chart_with_insight(
-      plot_author_popularity_scatter(author_stats_df, top_n=top_n_authors),
-      toggle_key="keywords_chart_author_popularity",
-      insight_text="Phân tán tác giả giúp nhận diện các trường hợp 'outlier': những tên tuổi tuy phát hành ít đầu sách nhưng mang lại hiệu suất chốt đơn cực kỳ cao.",
-      palette=palette,
-    )
-
   st.markdown("### 3) Học máy: Mức độ quan trọng của đặc trưng")
   run_ml = st.toggle(
-    "Bật mô hình Rừng ngẫu nhiên để xếp hạng mức ảnh hưởng của đặc trưng tiêu đề",
+    "Sử dụng mô hình Random Forest để xếp hạng mức ảnh hưởng của đặc trưng tiêu đề",
     value=True,
     key="keywords_run_ml",
   )

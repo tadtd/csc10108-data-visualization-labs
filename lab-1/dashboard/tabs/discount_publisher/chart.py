@@ -66,7 +66,7 @@ def draw_ml_importance(importance: pd.DataFrame):
     orientation="h",
     color_discrete_sequence=["#2ca02c"],
     labels={"importance": "Mức quan trọng", "feature": "Biến"},
-    title="Nhóm biến quan trọng theo mô hình Rừng ngẫu nhiên",
+    title="Nhóm biến quan trọng theo mô hình Random forrest",
   )
 
 

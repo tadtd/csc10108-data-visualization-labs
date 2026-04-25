@@ -47,11 +47,11 @@ def _build_reliability_note(total_count: int, support_count: int, threshold: int
 
 def render():
   apply_common_style()
-  st.subheader("Thông tin sách và phản hồi người mua")
-  st.caption(
-    "Phân tích chất lượng thông tin sản phẩm và nội dung review để rút ra insight "
-    "về hành vi mua hàng và hiệu quả bán."
-  )
+  # st.subheader("Thông tin sách và phản hồi người mua")
+  # st.caption(
+  #   "Phân tích chất lượng thông tin sản phẩm và nội dung review để rút ra insight "
+  #   "về hành vi mua hàng và hiệu quả bán."
+  # )
 
   retriever = InfoReviewRetriever()
   color_mode = st.session_state.get("color_mode", "Mặc định")
@@ -127,9 +127,14 @@ def render():
     st.warning("Không còn dữ liệu sau khi lọc. Hãy nới điều kiện lọc để tiếp tục.")
     return
 
-  if filtered_df.empty:
-    st.warning("Không còn dữ liệu sau khi lọc. Hãy nới điều kiện lọc để tiếp tục.")
-    return
+  st.markdown("### Tổng quan")
+  kpi_col_1, kpi_col_2, kpi_col_3 = st.columns(3)
+  with kpi_col_1:
+    st.metric("Số mẫu", f"{len(filtered_df):,}".replace(",", "."))
+  with kpi_col_2:
+    st.metric("Lượt bán TB", _format_number(filtered_df["sold_count"].mean(), 1))
+  with kpi_col_3:
+    st.metric("Review TB", _format_number(filtered_df["review_count"].mean(), 1))
 
   st.markdown("### 1) Tác động của mức độ hoàn thiện thông tin sách")
   st.caption(

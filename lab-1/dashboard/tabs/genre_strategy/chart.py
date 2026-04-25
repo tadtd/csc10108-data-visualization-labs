@@ -92,7 +92,7 @@ def draw_pivot_chart(pivot_table: pd.DataFrame):
     color_continuous_scale="Blues",
     labels={"color": "Lượt bán trung bình"},
     aspect="auto",
-    title="Bảng chéo: lượt bán trung bình theo thể loại và hình thức bán",
+    title="Bảng chéo thể loại: lượt bán trung bình theo hình thức bán",
   )
 
 
@@ -105,17 +105,86 @@ def draw_ml_coef_chart(coef_view: pd.DataFrame):
     color="coef",
     color_continuous_scale="RdBu",
     labels={"coef": "Hệ số tác động", "feature": "Biến"},
-    title="Top biến ảnh hưởng theo mô hình Ridge",
+    title="Top biến ảnh hưởng theo mô hình Ridge Regression",
   )
 
 
-def draw_ml_bucket_chart(bucket_long: pd.DataFrame, palette: list[str]):
-  return px.bar(
-    bucket_long,
+def draw_ml_feature_validation_chart(validation_df: pd.DataFrame, feature_label: str, palette: list[str]):
+  figure = px.line(
+    validation_df,
+    x="Nhóm giá trị",
+    y="Lượt bán trung vị",
+    markers=True,
+    color_discrete_sequence=[palette[0]],
+    labels={
+      "Nhóm giá trị": f"Nhóm giá trị của {feature_label}",
+      "Lượt bán trung vị": "Lượt bán trung vị (thực tế)",
+    },
+    title=f"Đối chiếu thực tế: {feature_label} và lượt bán",
+  )
+  figure.update_traces(mode="lines+markers+text", text=validation_df["Lượt bán trung vị"].map(lambda x: f"{x:,.1f}"), textposition="top center")
+  return figure
+
+
+def draw_ml_feature_validation_compact_chart(validation_df: pd.DataFrame, feature_label: str, palette: list[str]):
+  figure = px.bar(
+    validation_df,
+    x="Nhóm giá trị",
+    y="Lượt bán trung vị",
+    color_discrete_sequence=[palette[1]],
+    labels={
+      "Nhóm giá trị": f"Nhóm giá trị của {feature_label}",
+      "Lượt bán trung vị": "Lượt bán trung vị (thực tế)",
+    },
+    title=f"Đối chiếu nhanh thực tế: {feature_label} và lượt bán",
+  )
+  figure.update_traces(
+    text=validation_df["Lượt bán trung vị"].map(lambda x: f"{x:,.1f}"),
+    textposition="outside",
+    cliponaxis=False,
+  )
+  return figure
+
+
+def draw_ml_error_bucket_chart(error_df: pd.DataFrame, palette: list[str]):
+  figure = px.bar(
+    error_df,
     x="Nhóm dự báo",
-    y="Lượt bán",
-    color="Loại giá trị",
-    barmode="group",
-    color_discrete_sequence=[palette[0], palette[1]],
-    title="So sánh trung vị thực tế và dự báo theo nhóm sản phẩm",
+    y="Sai lệch tuyệt đối (%)",
+    color_discrete_sequence=[palette[2]],
+    title="Mức sai lệch giữa dự báo và thực tế theo nhóm lượt bán",
+    labels={
+      "Nhóm dự báo": "Nhóm lượt bán dự báo",
+      "Sai lệch tuyệt đối (%)": "Sai lệch tuyệt đối (%)",
+    },
   )
+  # Vẽ đường ngưỡng chạy toàn bộ chiều ngang biểu đồ.
+  figure.add_shape(
+    type="line",
+    xref="paper",
+    x0=0,
+    x1=1,
+    yref="y",
+    y0=20,
+    y1=20,
+    line={"color": "red", "dash": "dash", "width": 2},
+  )
+  # Trace dummy để hiện legend cho đường ngưỡng.
+  figure.add_trace(
+    go.Scatter(
+      x=[None],
+      y=[None],
+      mode="lines",
+      line={"color": "red", "dash": "dash", "width": 2},
+      name="Ngưỡng tham chiếu (20%)",
+      hoverinfo="skip",
+      showlegend=True,
+    )
+  )
+  figure.update_traces(
+    text=error_df["Sai lệch tuyệt đối (%)"].map(lambda x: f"{x:.1f}%"),
+    textposition="outside",
+    cliponaxis=False,
+    selector={"type": "bar"},
+  )
+  return figure

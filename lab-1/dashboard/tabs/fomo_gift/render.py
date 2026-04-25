@@ -31,11 +31,11 @@ def _format_number(value: float, decimals: int = 2) -> str:
 
 def render():
   apply_common_style()
-  st.subheader("Huy hiệu bán chạy và giá trị cộng thêm")
-  st.caption(
-    "Phân tích tác động của huy hiệu bán chạy và các yếu tố quà tặng/bản đặc biệt "
-    "đến hiệu quả bán hàng theo từng nhóm sản phẩm."
-  )
+  # st.subheader("Huy hiệu bán chạy và giá trị cộng thêm")
+  # st.caption(
+  #   "Phân tích tác động của huy hiệu bán chạy và các yếu tố quà tặng/bản đặc biệt "
+  #   "đến hiệu quả bán hàng theo từng nhóm sản phẩm."
+  # )
 
   retriever = FomoGiftRetriever()
   color_mode = st.session_state.get("color_mode", "Mặc định")
@@ -106,6 +106,15 @@ def render():
   if filtered_df.empty:
     st.warning("Không còn dữ liệu sau khi lọc. Hãy nới lỏng điều kiện lọc để tiếp tục.")
     return
+
+  st.markdown("### Tổng quan")
+  kpi_col_1, kpi_col_2, kpi_col_3 = st.columns(3)
+  with kpi_col_1:
+    st.metric("Số mẫu", f"{len(filtered_df):,}".replace(",", "."))
+  with kpi_col_2:
+    st.metric("Lượt bán TB", _format_number(filtered_df["sold_count"].mean(), 1))
+  with kpi_col_3:
+    st.metric("Rating TB", _format_number(filtered_df["rating"].mean(), 2))
 
   st.markdown("### 1) Tác động của huy hiệu bán chạy")
   st.caption(

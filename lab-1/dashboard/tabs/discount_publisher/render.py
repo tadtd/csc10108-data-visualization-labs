@@ -75,7 +75,7 @@ def _run_ml(df: pd.DataFrame) -> dict[str, pd.DataFrame | float]:
 
 def render():
   apply_common_style()
-  st.subheader("Giá, giảm giá, đánh giá và nhà xuất bản")
+  # st.subheader("Giá, giảm giá, đánh giá và nhà xuất bản")
 
   retriever = DiscountPublisherRetriever()
   color_mode = st.session_state.get("color_mode", "Mặc định")
@@ -121,6 +121,17 @@ def render():
   if filtered_df.empty:
     st.warning("Không có dữ liệu phù hợp bộ lọc hiện tại.")
     return
+
+  st.markdown("### Tổng quan")
+  kpi_col_1, kpi_col_2, kpi_col_3, kpi_col_4 = st.columns(4)
+  with kpi_col_1:
+    st.metric("Số mẫu", _format_number(len(filtered_df)))
+  with kpi_col_2:
+    st.metric("Lượt bán TB", _format_number(float(filtered_df["sold_count"].mean())))
+  with kpi_col_3:
+    st.metric("Rating TB", f"{float(filtered_df['rating'].mean()):.2f}")
+  with kpi_col_4:
+    st.metric("Giá TB", f"{vnd_format(float(filtered_df['price'].mean()))} đ")
 
   st.markdown("### 1) Ảnh hưởng của giá và giảm giá")
   price_summary = retriever.price_band_summary(filtered_df)
@@ -181,7 +192,7 @@ def render():
     palette=palette,
   )
 
-  st.markdown("### 4) Top yếu tố ảnh hưởng (thống kê + ML)")
+  st.markdown("### 4) Top các yếu tố ảnh hưởng")
   corr = retriever.numeric_correlation(filtered_df)
   if corr.empty:
     st.info("Dữ liệu chưa đủ để tính tương quan.")
@@ -197,7 +208,7 @@ def render():
 
   ml_result = _run_ml(filtered_df)
   if ml_result["ok"]:
-    st.markdown("#### Góc nhìn học máy (Hồi quy Rừng ngẫu nhiên)")
+    st.markdown("### 5) Góc nhìn học máy (Hồi quy Random Forest)")
     importance = ml_result["importance"].head(10).sort_values("importance")
     importance_sorted = importance.sort_values("importance", ascending=False)
     top_ml_disc = importance_sorted.iloc[0]["feature"] if not importance_sorted.empty else "các yếu tố"

@@ -12,9 +12,8 @@ from .chart import (
   draw_combo_compare_chart_single,
   draw_combo_uplift_chart,
   draw_genre_chart,
-  draw_ml_bucket_chart,
   draw_ml_coef_chart,
-  draw_pivot_chart,
+  draw_ml_feature_validation_chart,
   draw_publisher_chart,
 )
 from .retrieve import GenreStrategyRetriever
@@ -117,9 +116,45 @@ def _train_ridge_model(dataset: pd.DataFrame) -> dict[str, pd.DataFrame | float]
   }
 
 
+def _build_numeric_validation_frame(dataset: pd.DataFrame, feature_name: str) -> pd.DataFrame:
+  if feature_name not in dataset.columns:
+    return pd.DataFrame()
+  df = dataset[[feature_name, "sold_count"]].dropna().copy()
+  if df.empty or df[feature_name].nunique() < 3:
+    return pd.DataFrame()
+
+  if feature_name == "rating":
+    rating_bins = [0, 1, 2, 3, 4, 5]
+    rating_labels = ["0-1", "1-2", "2-3", "3-4", "4-5"]
+    df = df[(df["rating"] >= 0) & (df["rating"] <= 5)].copy()
+    if df.empty:
+      return pd.DataFrame()
+    df["Nhóm giá trị"] = pd.cut(
+      df["rating"],
+      bins=rating_bins,
+      labels=rating_labels,
+      include_lowest=True,
+      right=True,
+    )
+    df = df.dropna(subset=["Nhóm giá trị"]).copy()
+  else:
+    bin_count = min(6, int(df[feature_name].nunique()))
+    if bin_count < 3:
+      return pd.DataFrame()
+    df["Nhóm giá trị"] = pd.qcut(df[feature_name], q=bin_count, duplicates="drop").astype(str)
+
+  grouped = df.groupby("Nhóm giá trị", as_index=False).agg(
+    **{
+      "Lượt bán trung vị": ("sold_count", "median"),
+      "Số mẫu": ("sold_count", "size"),
+    }
+  )
+  return grouped
+
+
 def render():
   apply_common_style()
-  st.subheader("Chiến lược thể loại, nhà xuất bản và combo")
+  # st.subheader("Chiến lược thể loại, nhà xuất bản và combo")
 
   retriever = GenreStrategyRetriever()
 
@@ -194,6 +229,15 @@ def render():
     st.warning("Không có dữ liệu phù hợp với bộ lọc hiện tại.")
     return
 
+  st.markdown("### Tổng quan")
+  kpi_col_1, kpi_col_2, kpi_col_3 = st.columns(3)
+  with kpi_col_1:
+    st.metric("Số mẫu", _format_number(len(filtered_df)))
+  with kpi_col_2:
+    st.metric("Lượt bán TB", _format_number(float(filtered_df["sold_count"].mean())))
+  with kpi_col_3:
+    st.metric("Doanh thu TB", f"{vnd_format(float(filtered_df['revenue_est'].mean()))} đ")
+
   st.markdown("### 1) Bức tranh thể loại")
   genre_summary = retriever.genre_summary(filtered_df)
   top_genres = genre_summary.head(10)
@@ -245,7 +289,18 @@ def render():
     above_20 = int((combo_uplift["uplift_percent"] > 20).sum())
     top_positive = combo_uplift[combo_uplift["uplift_percent"] > 0]
     best_genres = ", ".join(top_positive.head(2)["genre"].tolist()) if not top_positive.empty else "Chưa có thể loại tăng trưởng dương"
-    insight_combo = f"Chiến lược bán theo Combo đang phát huy hiệu quả xuất sắc ở các ngách ({best_genres}), tạo đòn bẩy kích cầu mạnh mẽ và tăng AOV (giá trị trung bình đơn) vượt kỳ vọng." if above_20 >= 2 else "Chiến lược Combo có mang lại giá trị gia tăng ở một vài nhóm, tuy nhiên chưa tạo được sức bật doanh số đủ mạnh và đồng đều trên nhiều thể loại."
+    if len(show_uplift) == 1:
+      only_row = show_uplift.iloc[0]
+      only_genre = str(only_row["genre"])
+      uplift_percent = float(only_row["uplift_percent"])
+      if uplift_percent > 0:
+        insight_combo = f"Trong lát cắt hiện tại, riêng nhóm <b>{only_genre}</b> cho thấy bán Combo hiệu quả hơn bán lẻ (chênh lệch {uplift_percent:+.1f}%), nhưng chưa đủ dữ liệu các nhóm khác để kết luận xu hướng diện rộng."
+      else:
+        insight_combo = f"Trong lát cắt hiện tại, riêng nhóm <b>{only_genre}</b> chưa cho thấy lợi thế rõ rệt của Combo so với bán lẻ (chênh lệch {uplift_percent:+.1f}%), và chưa đủ dữ liệu để mở rộng sang các nhóm khác."
+    elif above_20 >= 2:
+      insight_combo = f"Chiến lược bán theo Combo đang phát huy hiệu quả xuất sắc ở các ngách ({best_genres}), tạo đòn bẩy kích cầu mạnh mẽ và tăng AOV (giá trị trung bình đơn) vượt kỳ vọng."
+    else:
+      insight_combo = "Chiến lược Combo có mang lại giá trị gia tăng ở một vài nhóm, tuy nhiên chưa tạo được sức bật doanh số đủ mạnh và đồng đều trên nhiều thể loại."
     render_chart_with_insight(
       fig_uplift,
       toggle_key="genre_chart_combo_uplift",
@@ -253,22 +308,7 @@ def render():
       palette=palette,
     )
 
-  st.markdown("### 4) Bảng chéo thể loại x hình thức bán")
-  pivot_table = retriever.combo_pivot_table(filtered_df)
-  if pivot_table.empty:
-    st.info("Không đủ dữ liệu để hiển thị pivot theo thể loại và combo.")
-  else:
-    fig_pivot = draw_pivot_chart(pivot_table)
-    best_combo_genre = pivot_table.sort_values(by="Combo", ascending=False).index[0] if "Combo" in pivot_table.columns else pivot_table.index[0]
-    insight_text_pivot = f"Bảng chéo cho thấy '{best_combo_genre}' đang là nhóm thu hút lượt bán cao, phản ánh xu hướng mua sỉ hoặc mua theo bộ rất mạnh ở ngách này."
-    render_chart_with_insight(
-      fig_pivot,
-      toggle_key="genre_chart_pivot",
-      insight_text=insight_text_pivot,
-      palette=palette,
-    )
-
-  st.markdown("### 5) Góc nhìn học máy: Hồi quy Ridge (mô tả xu hướng)")
+  st.markdown("### 4) Góc nhìn học máy: Hồi quy Ridge (mô tả xu hướng)")
   ml_source = filtered_df if len(filtered_df) >= 500 else products_df
   source_label = "dữ liệu đã lọc" if len(filtered_df) >= 500 else "toàn bộ dữ liệu clean (do bộ lọc quá ít mẫu)"
   st.caption(f"Huấn luyện mô hình trên {source_label}. Mục tiêu: diễn giải biến ảnh hưởng, không suy luận nhân quả.")
@@ -278,12 +318,14 @@ def render():
     st.info("Số lượng mẫu chưa đủ để hiển thị kết quả ML ổn định.")
   else:
     ml_result = _train_ridge_model(ml_dataset)
-    metrics = ml_result["metrics"].iloc[0]
 
     coef_view = ml_result["coef"].head(10).sort_values("coef")
     fig_coef = draw_ml_coef_chart(coef_view)
-    top_coef_feature = coef_view.iloc[0]["feature"] if not coef_view.empty else "các biến"
-    insight_text_coef = f"Hệ số hồi quy chỉ ra rằng '{top_coef_feature}' có sức nặng lớn nhất trong mô hình, là biến số cốt lõi chi phối mạnh mẽ đến sự thành bại của doanh thu."
+    top_coef_feature = str(ml_result["coef"].iloc[0]["feature"]) if not ml_result["coef"].empty else "các biến"
+    insight_text_coef = (
+      f"Theo mô hình Ridge, <b>{top_coef_feature}</b> là biến có độ ảnh hưởng lớn nhất. "
+      "Đây là tín hiệu để ưu tiên kiểm tra sâu trong phân tích, không phải kết luận nhân quả tuyệt đối."
+    )
     render_chart_with_insight(
       fig_coef,
       toggle_key="genre_chart_ml_coef",
@@ -291,13 +333,39 @@ def render():
       palette=palette,
     )
 
-    bucket_view = ml_result["bucket"]
-    if not bucket_view.empty:
-      bucket_long = bucket_view.melt(id_vars="Nhóm dự báo", var_name="Loại giá trị", value_name="Lượt bán")
-      fig_bucket = draw_ml_bucket_chart(bucket_long, palette)
-      render_chart_with_insight(
-        fig_bucket,
-        toggle_key="genre_chart_ml_bucket",
-        insight_text="Sự bám sát giữa đường thực tế và dự báo ở các phân khúc cho thấy hệ thống biến số hiện tại nắm bắt rất tốt xu hướng mua hàng của thị trường.",
-        palette=palette,
-      )
+    numeric_candidates = ["price", "discount_percent", "rating", "review_count", "page_count", "publish_year"]
+    numeric_coef = ml_result["coef"][ml_result["coef"]["feature"].isin(numeric_candidates)].copy()
+    if not numeric_coef.empty:
+      top_numeric_feature = str(numeric_coef.sort_values("abs_coef", ascending=False).iloc[0]["feature"])
+      validation_df = _build_numeric_validation_frame(ml_dataset, top_numeric_feature)
+      if validation_df.empty:
+        st.info("Chưa đủ dữ liệu để đối chiếu biến số hàng đầu với lượt bán thực tế.")
+      else:
+        fig_validation = draw_ml_feature_validation_chart(validation_df, top_numeric_feature, palette)
+        start_value = float(validation_df["Lượt bán trung vị"].iloc[0])
+        end_value = float(validation_df["Lượt bán trung vị"].iloc[-1])
+        delta_pct = ((end_value - start_value) / start_value * 100) if start_value > 0 else np.nan
+        if np.isnan(delta_pct):
+          validation_insight = (
+            f"Khi chia theo mức <b>{top_numeric_feature}</b>, lượt bán trung vị thay đổi giữa các nhóm. "
+            "Điều này cho thấy biến này có liên hệ với doanh số trong dữ liệu thực tế."
+          )
+        elif len(validation_df) < 3:
+          trend_word = "tăng" if delta_pct >= 0 else "giảm"
+          validation_insight = (
+            f"Hiện chỉ có <b>{len(validation_df)} nhóm</b> nên đường nhìn gần như thẳng; chưa đủ dày để kết luận xu hướng ổn định. "
+            f"Tạm thời, dữ liệu cho thấy lượt bán trung vị {trend_word} khoảng {abs(delta_pct):.1f}% giữa hai đầu dải <b>{top_numeric_feature}</b>."
+          )
+        else:
+          trend_word = "tăng" if delta_pct >= 0 else "giảm"
+          validation_insight = (
+            f"Đối chiếu dữ liệu thực tế cho thấy khi <b>{top_numeric_feature}</b> tăng từ nhóm thấp lên nhóm cao, "
+            f"lượt bán trung vị {trend_word} khoảng {abs(delta_pct):.1f}%. "
+            "Kết quả này nhất quán với tín hiệu từ mô hình và hữu ích cho mục tiêu phân tích xu hướng."
+          )
+        render_chart_with_insight(
+          fig_validation,
+          toggle_key="genre_chart_ml_feature_validation",
+          insight_text=validation_insight,
+          palette=palette,
+        )
