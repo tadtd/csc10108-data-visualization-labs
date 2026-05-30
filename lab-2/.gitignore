@@ -2,3 +2,4 @@ __pycache__/
 .venv/
 report/
 *.csv
+docs/
